@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Ellipse Viewer with Custom Classes and Background Image</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+        }
+        .inputs, .addClass, .Options, .selectedClass {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        h5 {
+            margin: 0;
+        }
+        input[type="file"], input[type="text"], input[type="color"], select {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+        .file-input-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .file-input-wrapper .btn {
+            background-color: #3498db;
+            color: white;
+            padding: 8px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+        #classColor {
+            padding: 2px;
+            width: 50px;
+        }   
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        .canvas-container {
+            overflow-x: auto;
+            overflow-y: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            max-width: 100%;
+            margin-top: 20px;
+        }
+        #particleCanvas {
+            border: 1px solid #ccc;
+        }
+        /* Custom Scrollbar Styles */
+        .canvas-container::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+        .canvas-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .canvas-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        .canvas-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .inputs, .addClass, .Options, .selectedClass {
+                justify-content: center;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Manual Particle Classifier</h1>
+        <div class="controls">
+            <div class="inputs">
+                <div class="file-input-wrapper">
+                    <button class="btn">Choose CSV</button>
+                    <input type="file" id="csvFile" accept=".csv">
+                </div>
+                <span id="csvFileName">No file selected</span>
+            </div>
+            <div class="inputs">
+                <div class="file-input-wrapper">
+                    <button class="btn">Choose Image</button>
+                    <input type="file" id="backgroundImage" accept=".tif">
+                </div>
+                <span id="imageFileName">No file selected</span>
+            </div>
+            <div class="addClass">
+                <input type="color" id="classColor" value="#ff0000">
+                <input type="text" id="className" placeholder="Class Name">
+                <button id="addClass">Add Class</button>
+            </div>
+            <div class="Options">
+                <select id="imageSize">
+                    <option value="1">Original Size</option>
+                    <option value="0.5">Compressed x2</option>
+                    <option value="0.25">Compressed x4</option>
+                </select>
+                <label>
+                    <input type="checkbox" id="showParticles" checked>
+                    Hide Particles
+                </label>
+                <button id="exportCSV">Export Classified Particles</button>
+            </div>  
+            <div class="selectedClass">
+                <h5>Selected Class:</h5>
+                <select id="currentClass"></select>
+            </div>  
+        </div>
+        <div class="canvas-container">
+            <canvas id="particleCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('csvFile');
+        const backgroundInput = document.getElementById('backgroundImage');
+        const canvas = document.getElementById('particleCanvas');
+        const ctx = canvas.getContext('2d');
+        const classNameInput = document.getElementById('className');
+        const classColorInput = document.getElementById('classColor');
+        const addClassButton = document.getElementById('addClass');
+        const currentClassSelect = document.getElementById('currentClass');
+        const imageSizeSelect = document.getElementById('imageSize');
+        const showParticlesCheckbox = document.getElementById('showParticles');
+        const exportCSVButton = document.getElementById('exportCSV');
+        const csvFileName = document.getElementById('csvFileName');
+        const imageFileName = document.getElementById('imageFileName');
+
+        const SCALE_FACTOR = 1 / 0.29; // Convert μm to pixels
+
+        let particles = [];
+        let classes = [
+            { id: 0, name: 'unassigned', color: '#0000ff', opacity: 0.15 }
+        ];
+        let currentClass = classes[0];
+        let backgroundImage = null;
+        let originalImageWidth, originalImageHeight;
+        let csvHeaders = [];
+        let csv_data = [];
+
+        fileInput.addEventListener('change', handleFileSelect);
+        backgroundInput.addEventListener('change', handleBackgroundSelect);
+        canvas.addEventListener('click', handleCanvasClick);
+        addClassButton.addEventListener('click', addClass);
+        currentClassSelect.addEventListener('change', updateCurrentClass);
+        imageSizeSelect.addEventListener('change', updateCanvasSize);
+        showParticlesCheckbox.addEventListener('change', redrawCanvas);
+        exportCSVButton.addEventListener('click', exportClassifiedParticles);
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                csvFileName.textContent = file.name;
+                const reader = new FileReader();
+
+                reader.onload = function(e) {
+                    const csvData = e.target.result;
+                    processCSV(csvData);
+                    // Initialize csv_data with the header row
+                    const headerRow = csvHeaders.join(',') + ',Class_ID,Class_Name';
+                    csv_data = [removeNewLines(headerRow)];
+                };
+
+                reader.readAsText(file);
+            } else {
+                csvFileName.textContent = 'No file selected';
+            }
+        }
+
+        function handleBackgroundSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                imageFileName.textContent = file.name;
+                const reader = new FileReader();
+
+                reader.onload = function(e) {
+                    loadTiffImage(e.target.result);
+                };
+
+                reader.onerror = function(e) {
+                    console.error("Error reading file:", e);
+                };
+
+                reader.readAsArrayBuffer(file);
+            } else {
+                imageFileName.textContent = 'No file selected';
+            }
+        }
+        function loadTiffImage(arrayBuffer) {
+            try {
+                const ifds = UTIF.decode(arrayBuffer);
+                UTIF.decodeImage(arrayBuffer, ifds[0]);
+                const rgba = UTIF.toRGBA8(ifds[0]);
+
+                originalImageWidth = ifds[0].width;
+                originalImageHeight = ifds[0].height;
+
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = originalImageWidth;
+                tempCanvas.height = originalImageHeight;
+                const tempCtx = tempCanvas.getContext('2d');
+
+                const imageData = tempCtx.createImageData(originalImageWidth, originalImageHeight);
+                imageData.data.set(rgba);
+                tempCtx.putImageData(imageData, 0, 0);
+
+                backgroundImage = tempCanvas;
+                updateCanvasSize();
+                console.log("TIFF image loaded successfully");
+            } catch (error) {
+                console.error("Error loading TIFF image:", error);
+            }
+        }
+
+        function processCSV(csvData) {
+            const rows = csvData.split('\n');
+            csvHeaders = rows[0].split(',');
+            const xIndex = csvHeaders.indexOf('X');
+            const yIndex = csvHeaders.indexOf('Y');
+            const majorIndex = csvHeaders.indexOf('Major');
+            const minorIndex = csvHeaders.indexOf('Minor');
+            const angleIndex = csvHeaders.indexOf('Angle');
+
+            if (xIndex === -1 || yIndex === -1 || majorIndex === -1 || minorIndex === -1 || angleIndex === -1) {
+                alert('CSV file must contain "X", "Y", "Major", "Minor", and "Angle" columns');
+                return;
+            }
+
+            particles = [];
+
+            for (let i = 1; i < rows.length; i++) {
+                const cells = rows[i].split(',');
+                if (cells.length > 1) {
+                    const x = parseFloat(cells[xIndex]) || 0;
+                    const y = parseFloat(cells[yIndex]) || 0;
+                    const major = parseFloat(cells[majorIndex]) || 0;
+                    const minor = parseFloat(cells[minorIndex]) || 0;
+                    const angle = parseFloat(cells[angleIndex]) || 0;
+                    const particle = {
+                        x: x * SCALE_FACTOR,
+                        y: y * SCALE_FACTOR,
+                        major: major * SCALE_FACTOR,
+                        minor: minor * SCALE_FACTOR,
+                        angle,
+                        color: classes[0].color,
+                        opacity: classes[0].opacity,
+                        classId: 0,
+                        className: classes[0].name,
+                        fullRow: cells
+                    };
+                    particles.push(particle);
+                }
+            }
+
+            redrawCanvas();
+        }
+
+        function redrawCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (backgroundImage) {
+                ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+            }
+            if (!showParticlesCheckbox.checked) {
+                particles.forEach(drawEllipse);
+            }
+        }
+
+        function drawEllipse(particle) {
+            const scaleFactor = parseFloat(imageSizeSelect.value);
+            ctx.save();
+            ctx.beginPath();
+            ctx.translate(particle.x * scaleFactor, particle.y * scaleFactor);
+            ctx.rotate(particle.angle * Math.PI / 180);
+            ctx.scale(particle.major * scaleFactor / 2, particle.minor * scaleFactor / 2);
+            ctx.arc(0, 0, 1, 0, 2 * Math.PI);
+            ctx.restore();
+            ctx.fillStyle = hexToRGBA(particle.color, particle.opacity);
+            ctx.fill();
+        }
+
+        function hexToRGBA(hex, opacity) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+        }
+
+        function handleCanvasClick(event) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleFactor = parseFloat(imageSizeSelect.value);
+            const clickX = (event.clientX - rect.left + canvas.parentElement.scrollLeft) / scaleFactor;
+            const clickY = (event.clientY - rect.top) / scaleFactor;
+
+            for (const particle of particles) {
+                if (isPointInEllipse(clickX, clickY, particle)) {
+                    particle.color = currentClass.color;
+                    particle.opacity = currentClass.opacity;
+                    particle.classId = currentClass.id;
+                    particle.className = currentClass.name;
+                    if (currentClass.id !== 0) {  // Only add to csv_data if not unassigned
+                        const newRow = `${particle.fullRow.join(',')},${particle.classId},${particle.className}`;
+                        csv_data.push(removeNewLines(newRow));
+                    }
+                    redrawCanvas();
+                    return;
+                }
+            }
+        }
+
+        function isPointInEllipse(x, y, ellipse) {
+            const cos = Math.cos(ellipse.angle * Math.PI / 180);
+            const sin = Math.sin(ellipse.angle * Math.PI / 180);
+            const dx = x - ellipse.x;
+            const dy = y - ellipse.y;
+            const xRotated = dx * cos + dy * sin;
+            const yRotated = -dx * sin + dy * cos;
+            return (xRotated * xRotated) / (ellipse.major * ellipse.major / 4) + 
+                   (yRotated * yRotated) / (ellipse.minor * ellipse.minor / 4) <= 1;
+        }
+
+        function addClass() {
+            const name = classNameInput.value.trim();
+            const color = classColorInput.value;
+
+            if (name && color) {
+                const newId = classes.length;
+                classes.push({ id: newId, name, color, opacity: 1.0 });
+                updateClassSelect();
+                classNameInput.value = '';
+            }
+        }
+
+        function updateClassSelect() {
+            currentClassSelect.innerHTML = '';
+            classes.forEach((cls, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = cls.name;
+                option.style.backgroundColor = cls.color;
+                currentClassSelect.appendChild(option);
+            });
+        }
+
+        function updateCurrentClass() {
+            const selectedIndex = currentClassSelect.value;
+            currentClass = classes[selectedIndex];
+        }
+
+        function updateCanvasSize() {
+            if (!backgroundImage) return;
+
+            const scaleFactor = parseFloat(imageSizeSelect.value);
+            canvas.width = originalImageWidth * scaleFactor;
+            canvas.height = originalImageHeight * scaleFactor;
+            canvas.style.width = `${canvas.width}px`;
+            canvas.style.height = `${canvas.height}px`;
+            redrawCanvas();
+        }
+
+        function removeNewLines(str) {
+            return str.replace(/[\r\n]+/g, " ");
+        }
+
+        function exportClassifiedParticles() {
+            if (csv_data.length <= 1) {
+                alert('No particles have been classified yet.');
+                return;
+            }
+
+            const csvContent = csv_data.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'classified_particles.csv');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+
+        // Initialize the class select
+        updateClassSelect();
+    </script>
+</body>
+</html>

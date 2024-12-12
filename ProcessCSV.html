@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CSV Joiner</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 900px;
+      margin: 0 auto;
+    }
+    h1 {
+        color: #1c3e66;
+        font-weight: 900;
+        font-size: x-large;
+    }
+    #fileInput {
+      margin-bottom: 10px;
+    }
+    #progressBar {
+      width: 0%;
+      height: 30px;
+      background-color: #4CAF50;
+      text-align: center;
+      line-height: 30px;
+      color: white;
+    }
+    #progressContainer {
+      width: 100%;
+      background-color: #ddd;
+      margin-bottom: 10px;
+      display: none; /* Hide initially */
+    }
+    #downloadButton {
+      padding: 10px 20px;
+      background-color: #57abff;
+      color: white;
+      border: none;
+      cursor: pointer;
+      display: none; /* Hide initially */
+      border-radius: 5px;
+      font-size: medium;
+    }
+    #status {
+      margin-top: 10px;
+    }
+    button {
+        background-color: #57abff;
+        border: none;
+        color: white;
+        padding: 10px 20px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: medium;
+        margin: 4px 2px;
+        cursor: pointer;
+        border-radius: 5px;
+    }
+    .file-input-container {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .file-input-container > input {
+        margin-right: 10px;
+        font-size: medium;
+    }
+    .file-input-container > input::file-selector-button {
+        background-color: #57abff;
+        border: none;
+        color: white;
+        padding: 10px 20px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: medium;
+        margin: 4px 2px;
+        cursor: pointer;
+        border-radius: 5px;
+    }
+    .csv-name {
+        background-color: #d9d9d9;
+        border: none;
+        color: black;
+        padding: 10px 20px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: medium;
+        margin: 4px 2px;
+        border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>CSV Joiner</h1>
+
+  <div class="file-input-container">
+    <input type="file" id="fileInput" webkitdirectory directory multiple>
+    <span class="csv-name"></span>
+  </div>
+
+  <div id="progressContainer">
+    <div id="progressBar">0%</div>
+  </div>
+  <div id="status"></div>
+
+  <button id="downloadButton" style="display: none;">Download Joined CSV</button>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const progressBar = document.getElementById('progressBar');
+    const progressContainer = document.getElementById('progressContainer');
+    const downloadButton = document.getElementById('downloadButton');
+    const statusDiv = document.getElementById('status');
+    const csvNameSpan = document.querySelector('.csv-name');
+
+    fileInput.addEventListener('change', async (event) => {
+      const files = event.target.files;
+      const csvFiles = Array.from(files).filter(file => file.name.endsWith('.csv'));
+      const totalFiles = csvFiles.length;
+
+      csvNameSpan.textContent = csvFiles.length > 0 ? csvFiles[0].name : "No CSV files selected";
+
+      progressContainer.style.display = 'block';
+      downloadButton.style.display = 'none';
+      progressBar.style.width = '0%';
+      progressBar.textContent = '0%';
+      statusDiv.textContent = `Processing ${totalFiles} CSV files...`;
+
+      const processedData = await processFiles(csvFiles, totalFiles);
+      if (processedData) {
+            const { generalInfoRows, vesselsRows, cellsRows, header } = categorizeRows(processedData);
+            const mergedCellsRows = mergeCellsRows(cellsRows, header);
+            const cellsRowsWithDensity = calculateNeighborDensity(mergedCellsRows);
+            const fixedGeneralInfoRows = addHeaderToCategory(generalInfoRows, header);
+            const fixedVesselsRows = addHeaderToCategory(vesselsRows, header);
+            createDownloadButtons(fixedGeneralInfoRows, fixedVesselsRows, cellsRowsWithDensity);
+        }
+    });
+
+    async function processFiles(csvFiles, totalFiles) {
+        let processedFiles = 0;
+        let results = [];
+        let headerWritten = false;
+        let originalHeader = null;
+        const batchSize = 10; // Adjust based on testing
+
+        const processBatch = async (batch) => {
+            const promises = batch.map(file => processFile(file));
+            const batchResults = await Promise.all(promises);
+            results.push(...batchResults);
+        };
+
+        const processFile = async (file) => {
+            try {
+                const text = await readFile(file);
+                const { header, rows } = parseCSV(text, headerWritten, file.name);
+
+                if (!headerWritten) {
+                    originalHeader = header; // Capture the original header
+                    headerWritten = true;
+                }
+
+                let fileContent = rows.join('\n') + (rows.length > 0 ? '\n' : '');
+                
+                processedFiles++;
+                updateProgress(processedFiles, totalFiles, file.name);
+                return fileContent;
+
+            } catch (error) {
+                console.error('Error processing file:', file.name, error);
+                processedFiles++;
+                updateProgress(processedFiles, totalFiles, file.name);
+                return '';
+            }
+        };
+
+        for (let i = 0; i < csvFiles.length; i += batchSize) {
+            const batch = csvFiles.slice(i, i + batchSize);
+            await processBatch(batch);
+        }
+
+        // Add the original header back to the results for further processing
+        if (originalHeader) {
+            results.unshift(originalHeader + '\n');
+        }
+
+        // Delete unwanted columns after processing all files
+        const cleanedResults = deleteColumns(results);
+
+        return cleanedResults;
+    }
+
+    function categorizeRows(results) {
+        let generalInfoRows = [];
+        let vesselsRows = [];
+        let cellsRows = [];
+        let header = results[0].trim(); // Get the header from the first line of the first result
+        
+        // Remove the original header from results
+        results = results.slice(1);
+    
+        results.forEach(result => {
+            const lines = result.split('\n').filter(line => line.trim() !== '');
+            lines.forEach(row => {
+                const firstCellValue = row.split(';')[0].trim();
+    
+                if (["All Nuclei", "Central Vessels", "Background / Border Vessels", "All Cytoplasm"].includes(firstCellValue)) {
+                    generalInfoRows.push(row);
+                } else if (firstCellValue.startsWith("Vessel_") || firstCellValue.startsWith("Border_")) {
+                    vesselsRows.push(row);
+                } else if (firstCellValue.startsWith("Nucleus_") || firstCellValue.startsWith("Cytoplasm_")) {
+                    cellsRows.push(row);
+                }
+            });
+        });
+    
+        return { generalInfoRows, vesselsRows, cellsRows, header };
+    }
+
+    function mergeCellsRows(cellsRows, originalHeader) {
+        const nucleusRows = {};
+        const cytoplasmRows = {};
+        const mergedRows = [];
+
+        // Separate nucleus and cytoplasm rows based on the identifier, number, and filename
+        cellsRows.forEach(row => {
+            const cells = row.split(';');
+            const identifier = cells[0].split('_')[0]; // 'Nucleus' or 'Cytoplasm'
+            const cellNumber = cells[0].split('_')[1]; // Number after the underscore
+            const filename = cells[22]; // Filename is the 23rd cell (index 22)
+            const uniqueIdentifier = `${cellNumber}_${filename}`;
+
+            if (identifier === 'Nucleus') {
+                nucleusRows[uniqueIdentifier] = cells;
+            } else if (identifier === 'Cytoplasm') {
+                cytoplasmRows[uniqueIdentifier] = cells;
+            }
+        });
+
+        // Create new headers
+        const baseHeaders = originalHeader.split(';');
+        const nuclearHeaders = baseHeaders.map(h => 'Nuclear_' + h);
+        const cytoplasmicHeaders = baseHeaders.map(h => 'Cytoplasmic_' + h);
+
+        // Create the new header with all columns
+        const newHeader = [
+            'ROI',
+            ...nuclearHeaders.slice(1),
+            'Original_Filename',
+            'Nuclear_Hematoxylin_Mean',
+            'Nuclear_Hematoxylin_Std',
+            'Nuclear_Eosin_Mean',
+            'Nuclear_Eosin_Std',
+            ...cytoplasmicHeaders.slice(1),
+            'Cytoplasmic_Original_Filename',
+            'Cytoplasmic_Hematoxylin_Mean',
+            'Cytoplasmic_Hematoxylin_Std',
+            'Cytoplasmic_Eosin_Mean',
+            'Cytoplasmic_Eosin_Std'
+        ].join(';');
+
+        // Add the new header to the merged rows
+        mergedRows.push(newHeader);
+
+        // Merge the rows based on matching identifiers
+        for (const id in nucleusRows) {
+            if (cytoplasmRows[id]) {
+                const nucleusRow = nucleusRows[id];
+                const cytoplasmRow = cytoplasmRows[id];
+
+                // Extract the specific columns for the merged row
+                const nucleusFilename = nucleusRow[22];
+                const nucleusHemaMean = nucleusRow[23];
+                const nucleusHemaStd = nucleusRow[24];
+                const nucleusEosinMean = nucleusRow[25];
+                const nucleusEosinStd = nucleusRow[26];
+
+                const cytoplasmFilename = cytoplasmRow[22];
+                const cytoplasmHemaMean = cytoplasmRow[23];
+                const cytoplasmHemaStd = cytoplasmRow[24];
+                const cytoplasmEosinMean = cytoplasmRow[25];
+                const cytoplasmEosinStd = cytoplasmRow[26];
+
+                // Merge the rows
+                const mergedRow = [
+                    nucleusRow[0].replace('Nucleus_', 'Cell_'),
+                    ...nucleusRow.slice(1, 22),
+                    nucleusFilename,
+                    nucleusHemaMean,
+                    nucleusHemaStd,
+                    nucleusEosinMean,
+                    nucleusEosinStd,
+                    ...cytoplasmRow.slice(1, 22),
+                    cytoplasmFilename,
+                    cytoplasmHemaMean,
+                    cytoplasmHemaStd,
+                    cytoplasmEosinMean,
+                    cytoplasmEosinStd
+                ];
+
+                mergedRows.push(mergedRow.join(';'));
+            }
+        }
+
+        return mergedRows;
+    }
+
+    function calculateNeighborDensity(cellsRows) {
+    const dataRows = cellsRows.slice(1); // Exclude header row
+    const headers = cellsRows[0].split(';');
+
+    // Find indices of Nuclear_X, Nuclear_Y, and Original_Filename columns
+    const xIndex = headers.indexOf('Nuclear_X');
+    const yIndex = headers.indexOf('Nuclear_Y');
+    const filenameIndex = headers.indexOf('Original_Filename');
+
+    // Prepare an array to hold the updated rows with neighbor density
+    const updatedRows = [];
+    updatedRows.push(headers.join(';') + ';Neighbor_Density');
+
+    // Group data rows by filename
+    const rowsByFilename = {};
+    dataRows.forEach(row => {
+        const cells = row.split(';');
+        const filename = cells[filenameIndex];
+        if (!rowsByFilename[filename]) {
+            rowsByFilename[filename] = [];
+        }
+        rowsByFilename[filename].push(row);
+    });
+
+    // Calculate neighbor density for each file separately
+    for (const filename in rowsByFilename) {
+        console.log(`Calculating neighbor density for file: ${filename}`);
+        const fileDataRows = rowsByFilename[filename];
+
+        // Create points array for the current file
+        const points = fileDataRows.map((row, index) => {
+            const cells = row.split(';');
+            const x = parseFloat(cells[xIndex]);
+            const y = parseFloat(cells[yIndex]);
+
+            if (isNaN(x) || isNaN(y)) {
+                console.warn(`Invalid x or y at row index ${index} in file ${filename}:`, x, y);
+                return null; // Skip this point
+            }
+
+            return { x, y, row: cells };
+        }).filter(point => point !== null); // Remove null points
+
+        // Grid-based approach for the current file
+        const cellSize = 30; 
+        const grid = {};
+
+        // Build the grid for the current file
+        points.forEach(point => {
+            const gridX = Math.floor(point.x / cellSize);
+            const gridY = Math.floor(point.y / cellSize);
+            const gridKey = `${gridX},${gridY}`;
+
+            if (!grid[gridKey]) {
+                grid[gridKey] = [];
+            }
+            grid[gridKey].push(point);
+        });
+
+        // Calculate neighbor density for the current file
+        fileDataRows.forEach((row, rowIndex) => {
+            const cells = row.split(';');
+            const x1 = parseFloat(cells[xIndex]);
+            const y1 = parseFloat(cells[yIndex]);
+            let neighborCount = 0;
+
+            if (!isNaN(x1) && !isNaN(y1)) {
+                const gridX = Math.floor(x1 / cellSize);
+                const gridY = Math.floor(y1 / cellSize);
+
+                // Iterate over neighboring grid cells
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        const neighborGridKey = `${gridX + dx},${gridY + dy}`;
+                        const neighborGridCell = grid[neighborGridKey];
+
+                        if (neighborGridCell) {
+                            neighborGridCell.forEach(otherPoint => {
+                                const dx = otherPoint.x - x1;
+                                const dy = otherPoint.y - y1;
+                                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                                if (distance > 0 && distance < cellSize) { 
+                                    neighborCount++;
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Add the neighbor density to the row
+            cells.push(neighborCount.toString());
+            updatedRows.push(cells.join(';'));
+        });
+    }
+
+    return updatedRows;
+}
+
+    function addHeaderToCategory(rows, originalHeader) {
+        if (rows.length === 0) return [];
+    
+        // Create a new header string by combining the original header with the new columns
+        const newHeader = originalHeader + ';Original_Filename;Hematoxylin_Mean;Hematoxylin_Std;Eosin_Mean;Eosin_Std';
+    
+        // Add the new header to the rows
+        return [newHeader, ...rows];
+    }
+
+    function createDownloadButtons(generalInfoRows, vesselsRows, cellsRows) {
+        if (generalInfoRows.length > 0) {
+            createDownloadButton('General Info', generalInfoRows.join('\n'), 'General_Info.csv');
+        }
+        if (vesselsRows.length > 0) {
+            createDownloadButton('Vessels', vesselsRows.join('\n'), 'Vessels.csv');
+        }
+        if (cellsRows.length > 0) {
+            createDownloadButton('Cells', cellsRows.join('\n'), 'Cells.csv');
+        }
+    }
+
+    function createDownloadButton(label, data, filename) {
+        const downloadButton = document.createElement('button');
+        downloadButton.textContent = `Download ${label} CSV`;
+        downloadButton.onclick = () => downloadCSV(data, filename);
+        document.body.appendChild(downloadButton);
+    }
+
+    function deleteColumns(results) {
+        if (results.length === 0) return results;
+    
+        // Separate the original header from the data rows
+        const originalHeader = results[0].trim();
+        const dataRows = results.slice(1);
+    
+        // Find indices of columns to delete in the original header
+        const columnsToDelete = ['Perimeter', 'Circ.', 'Feret', 'AreaFraction', 'Hematoxylin_Histogram', 'Eosin_Histogram'];
+        const indicesToDelete = columnsToDelete.map(column => originalHeader.split(';').indexOf(column)).filter(index => index !== -1);
+    
+        // Remove columns from the original header
+        const updatedHeader = originalHeader.split(';').filter((_, index) => !indicesToDelete.includes(index)).join(';');
+    
+        // Process data rows without modifying the header
+        const cleanedDataRows = dataRows.map(result => {
+            const rows = result.split('\n').filter(row => row.trim() !== '');
+            return rows.map(row => {
+                const values = row.split(';');
+                // Ensure that we don't try to delete columns that don't exist
+                if (values.length > Math.max(...indicesToDelete)) {
+                    return values.filter((_, index) => !indicesToDelete.includes(index)).join(';');
+                }
+                return row; // Return the row as is if it doesn't have enough columns
+            }).join('\n');
+        });
+    
+        // Return the updated header and cleaned data rows as an array
+        return [updatedHeader, ...cleanedDataRows];
+    }
+    
+    function readFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    }
+
+    function parseCSV(csv, headerWritten, filename) {
+        const lines = csv.split(/\r?\n/);
+        let header = null;
+        let rows = [];
+      
+        if (!headerWritten && lines.length > 0) {
+          header = parseHeader(lines[0]);
+          lines.shift();
+        }
+      
+        for (const line of lines) {
+          if (line.trim() === '') continue;
+          let parsedLine = parseLine(line, filename);
+          rows.push(parsedLine);
+        }
+      
+        return { header, rows };
+      }
+      
+      function parseHeader(line) {
+        return line.split(',').map(h => h.trim()).join(';');
+      }
+
+      function parseLine(line, filename) {
+        let values = [];
+        let insideQuotes = false;
+        let currentValue = '';
+      
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+      
+          if (char === '"') {
+            insideQuotes = !insideQuotes;
+            currentValue += char;
+          } else if (char === ',' && !insideQuotes) {
+            values.push(currentValue.trim());
+            currentValue = '';
+          } else {
+            currentValue += char;
+          }
+        }
+        values.push(currentValue.trim());
+      
+        const hemaIndex = 26;
+        const eosinIndex = 27;
+      
+        let hemaMean = 0;
+        let hemaStd = 0;
+        let eosinMean = 0;
+        let eosinStd = 0;
+      
+        if (hemaIndex < values.length) {
+          const hemaData = formatHistogramData(values[hemaIndex]);
+          const hemaHistogram = hemaData.slice(1, -1).split(',').map(Number);
+          hemaMean = calculateMean(hemaHistogram);
+          hemaStd = calculateStdDev(hemaHistogram, hemaMean);
+          values[hemaIndex] = hemaData;
+        }
+      
+        if (eosinIndex < values.length) {
+          const eosinData = formatHistogramData(values[eosinIndex]);
+          const eosinHistogram = eosinData.slice(1, -1).split(',').map(Number);
+          eosinMean = calculateMean(eosinHistogram);
+          eosinStd = calculateStdDev(eosinHistogram, eosinMean);
+          values[eosinIndex] = eosinData;
+        }
+      
+        let row = values.map(val => {
+          if (!val.startsWith('"') && !val.endsWith('"')) {
+            const num = parseFloat(val);
+            return isNaN(num) ? val : num.toLocaleString('de-DE');
+          }
+          return val;
+        }).join(';');
+      
+        row += `;"${filename}";${hemaMean.toFixed(2)};${hemaStd.toFixed(2)};${eosinMean.toFixed(2)};${eosinStd.toFixed(2)}`;
+        return row;
+      }
+
+      function calculateMean(histogram) {
+        let weightedSum = 0;
+        let totalCount = 0;
+        for (let i = 0; i < histogram.length; i++) {
+          weightedSum += i * histogram[i];
+          totalCount += histogram[i];
+        }
+        return totalCount > 0 ? weightedSum / totalCount : 0;
+      }
+      
+      function calculateStdDev(histogram, mean) {
+        let sumOfSquares = 0;
+        let totalCount = 0;
+        for (let i = 0; i < histogram.length; i++) {
+          sumOfSquares += Math.pow(i - mean, 2) * histogram[i];
+          totalCount += histogram[i];
+        }
+        return totalCount > 0 ? Math.sqrt(sumOfSquares / totalCount) : 0;
+      }
+      
+      function formatHistogramData(data) {
+        const innerData = data.slice(1, -1);
+        return `"${innerData}"`;
+      }
+
+    function updateProgress(processedFiles, totalFiles, currentFileName) {
+        const progressPercent = Math.round((processedFiles / totalFiles) * 100);
+        progressBar.style.width = progressPercent + '%';
+        progressBar.textContent = progressPercent + '%';
+        statusDiv.textContent = `Processing file ${processedFiles} of ${totalFiles}: ${currentFileName}`;
+    }
+      
+
+    function downloadCSV(data, filename) {
+      const blob = new Blob([data], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+</body>
+</html>
