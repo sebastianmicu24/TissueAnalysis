@@ -43,6 +43,9 @@
         h5 {
             margin: 0;
         }
+        .dropdown-item:hover {
+            background-color: #f0f0f0;
+        }
         input[type="file"], input[type="text"], input[type="color"], select {
             padding: 8px;
             border: 1px solid #ccc;
@@ -51,16 +54,21 @@
         }
         .file-input-wrapper {
             position: relative;
-            overflow: hidden;
             display: inline-block;
         }
-        .file-input-wrapper input[type=file] {
-            font-size: 100px;
+        .dropdown-input {
+            width: 200px;
+            padding: 5px;
+        }
+        .dropdown-list {
             position: absolute;
-            left: 0;
-            top: 0;
-            opacity: 0;
-            cursor: pointer;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            background-color: white;
+            z-index: 1000;
+            width: 100%;
+            display: none;
         }
         .file-input-wrapper .btn {
             background-color: #3498db;
@@ -68,6 +76,10 @@
             padding: 8px 20px;
             border-radius: 4px;
             font-size: 14px;
+            cursor: pointer;
+        }
+        .dropdown-item {
+            padding: 5px;
             cursor: pointer;
         }
         button {
@@ -128,6 +140,7 @@
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -152,22 +165,29 @@
                 <input type="text" id="className" placeholder="Class Name">
                 <button id="addClass">Add Class</button>
             </div>
-            <div class="Options">
-                <select id="imageSize">
-                    <option value="1">Original Size</option>
-                    <option value="0.5">Compressed x2</option>
-                    <option value="0.25">Compressed x4</option>
-                </select>
-                <label>
-                    <input type="checkbox" id="showParticles" checked>
-                    Hide Particles
-                </label>
-                <button id="exportCSV">Export Classified Particles</button>
+        <div class="Options">
+            <select id="imageSize">
+                <option value="1">Original Size</option>
+                <option value="0.5">Compressed x2</option>
+                <option value="0.25">Compressed x4</option>
+            </select>
+            <label>
+                <input type="checkbox" id="showParticles">
+                Show Particles
+            </label>
+            <button id="exportCSV">Export Classified Particles</button>
             </div>  
             <div class="selectedClass">
                 <h5>Selected Class:</h5>
                 <select id="currentClass"></select>
-            </div>  
+            </div>
+            <div class="selectedFile">
+                <h5>Original File:</h5>
+                <div class="dropdown-container">
+                    <input type="text" id="originalFileInput" class="dropdown-input" placeholder="Search or select file">
+                    <div id="originalFileList" class="dropdown-list"></div>
+                </div>
+            </div>
         </div>
         <div class="canvas-container">
             <canvas id="particleCanvas"></canvas>
@@ -188,6 +208,8 @@
         const exportCSVButton = document.getElementById('exportCSV');
         const csvFileName = document.getElementById('csvFileName');
         const imageFileName = document.getElementById('imageFileName');
+        const originalFileInput = document.getElementById('originalFileInput');
+        const originalFileList = document.getElementById('originalFileList');
 
         const SCALE_FACTOR = 1 / 0.29; // Convert μm to pixels
 
@@ -200,6 +222,10 @@
         let originalImageWidth, originalImageHeight;
         let csvHeaders = [];
         let csv_data = [];
+        let originalFiles = new Set();
+        let particleIndex = {};
+        let currentFile = 'all';
+        let visibleParticles = [];
 
         fileInput.addEventListener('change', handleFileSelect);
         backgroundInput.addEventListener('change', handleBackgroundSelect);
@@ -209,27 +235,119 @@
         imageSizeSelect.addEventListener('change', updateCanvasSize);
         showParticlesCheckbox.addEventListener('change', redrawCanvas);
         exportCSVButton.addEventListener('click', exportClassifiedParticles);
+        originalFileInput.addEventListener('input', handleOriginalFileInput);
+        originalFileInput.addEventListener('focus', showDropdown);
+        document.addEventListener('click', hideDropdown);
 
         function handleFileSelect(event) {
             const file = event.target.files[0];
             if (file) {
                 csvFileName.textContent = file.name;
-                const reader = new FileReader();
-
-                reader.onload = function(e) {
-                    const csvData = e.target.result;
-                    processCSV(csvData);
-                    // Initialize csv_data with the header row
-                    const headerRow = csvHeaders.join(',') + ',Class_ID,Class_Name';
-                    csv_data = [removeNewLines(headerRow)];
-                };
-
-                reader.readAsText(file);
+                Papa.parse(file, {
+                    header: true,
+                    delimiter: ';', // Use semicolon as delimiter
+                    dynamicTyping: false, // We'll handle type conversion manually
+                    chunk: function(results) {
+                        processChunk(results.data);
+                    },
+                    complete: function() {
+                        console.log("Parsing complete");
+                        console.log("Total particles:", particles.length);
+                        updateOriginalFileList();
+                        filterParticles();
+                    },
+                    error: function(error) {
+                        console.error("Error parsing CSV:", error);
+                    }
+                });
             } else {
                 csvFileName.textContent = 'No file selected';
             }
         }
 
+        function processChunk(data) {
+            data.forEach(row => {
+                if (row['Nuclear_X'] && row['Nuclear_Y']) {
+                    try {
+                        const particle = {
+                            x: parseFloat(row['Nuclear_X'].replace(',', '.')) * SCALE_FACTOR,
+                            y: parseFloat(row['Nuclear_Y'].replace(',', '.')) * SCALE_FACTOR,
+                            major: parseFloat(row['Nuclear_Major'].replace(',', '.')) * SCALE_FACTOR,
+                            minor: parseFloat(row['Nuclear_Minor'].replace(',', '.')) * SCALE_FACTOR,
+                            angle: parseFloat(row['Nuclear_Angle'].replace(',', '.')),
+                            color: classes[0].color,
+                            opacity: classes[0].opacity,
+                            classId: 0,
+                            className: classes[0].name,
+                            originalFile: row['Original_Filename'],
+                            fullRow: Object.values(row)
+                        };
+                        if (isNaN(particle.x) || isNaN(particle.y) || isNaN(particle.major) || isNaN(particle.minor) || isNaN(particle.angle)) {
+                            console.warn("Invalid particle data:", row);
+                            return;
+                        }
+
+                        particles.push(particle);
+                        originalFiles.add(row['Original_Filename']);
+                        
+                        if (!particleIndex[row['Original_Filename']]) {
+                            particleIndex[row['Original_Filename']] = [];
+                        }
+                        particleIndex[row['Original_Filename']].push(particles.length - 1);
+                    } catch (error) {
+                        console.error("Error processing row:", error, row);
+                    }
+                }
+            });
+        }
+
+      
+        function updateOriginalFileList() {
+            originalFileList.innerHTML = '<div class="dropdown-item" data-value="all">All Files</div>';
+            originalFiles.forEach(file => {
+                const item = document.createElement('div');
+                item.className = 'dropdown-item';
+                item.textContent = file;
+                item.dataset.value = file;
+                item.addEventListener('click', () => selectOriginalFile(file));
+                originalFileList.appendChild(item);
+            });
+        }
+
+        function handleOriginalFileInput() {
+            const searchTerm = originalFileInput.value.toLowerCase();
+            const items = originalFileList.getElementsByClassName('dropdown-item');
+            for (let item of items) {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(searchTerm) ? '' : 'none';
+            }
+            showDropdown();
+        }
+
+        function showDropdown() {
+            originalFileList.style.display = 'block';
+        }
+
+        function hideDropdown(event) {
+            if (!originalFileInput.contains(event.target) && !originalFileList.contains(event.target)) {
+                originalFileList.style.display = 'none';
+            }
+        }
+
+        function selectOriginalFile(file) {
+            originalFileInput.value = file;
+            currentFile = file;
+            filterParticles();
+            hideDropdown({target: document.body});
+        }
+
+        function filterParticles() {
+            visibleParticles = currentFile === 'all' 
+                ? particles 
+                : particles.filter((_, index) => particleIndex[currentFile].includes(index));
+            console.log("Filtered particles:", visibleParticles.length);
+            redrawCanvas();
+        }
         function handleBackgroundSelect(event) {
             const file = event.target.files[0];
             if (file) {
@@ -249,6 +367,7 @@
                 imageFileName.textContent = 'No file selected';
             }
         }
+
         function loadTiffImage(arrayBuffer) {
             try {
                 const ifds = UTIF.decode(arrayBuffer);
@@ -274,57 +393,14 @@
                 console.error("Error loading TIFF image:", error);
             }
         }
-
-        function processCSV(csvData) {
-            const rows = csvData.split('\n');
-            csvHeaders = rows[0].split(',');
-            const xIndex = csvHeaders.indexOf('X');
-            const yIndex = csvHeaders.indexOf('Y');
-            const majorIndex = csvHeaders.indexOf('Major');
-            const minorIndex = csvHeaders.indexOf('Minor');
-            const angleIndex = csvHeaders.indexOf('Angle');
-
-            if (xIndex === -1 || yIndex === -1 || majorIndex === -1 || minorIndex === -1 || angleIndex === -1) {
-                alert('CSV file must contain "X", "Y", "Major", "Minor", and "Angle" columns');
-                return;
-            }
-
-            particles = [];
-
-            for (let i = 1; i < rows.length; i++) {
-                const cells = rows[i].split(',');
-                if (cells.length > 1) {
-                    const x = parseFloat(cells[xIndex]) || 0;
-                    const y = parseFloat(cells[yIndex]) || 0;
-                    const major = parseFloat(cells[majorIndex]) || 0;
-                    const minor = parseFloat(cells[minorIndex]) || 0;
-                    const angle = parseFloat(cells[angleIndex]) || 0;
-                    const particle = {
-                        x: x * SCALE_FACTOR,
-                        y: y * SCALE_FACTOR,
-                        major: major * SCALE_FACTOR,
-                        minor: minor * SCALE_FACTOR,
-                        angle,
-                        color: classes[0].color,
-                        opacity: classes[0].opacity,
-                        classId: 0,
-                        className: classes[0].name,
-                        fullRow: cells
-                    };
-                    particles.push(particle);
-                }
-            }
-
-            redrawCanvas();
-        }
-
         function redrawCanvas() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             if (backgroundImage) {
                 ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
             }
-            if (!showParticlesCheckbox.checked) {
-                particles.forEach(drawEllipse);
+            if (showParticlesCheckbox.checked) {
+                console.log("Drawing particles:", visibleParticles.length);
+                visibleParticles.forEach(drawEllipse);
             }
         }
 
@@ -364,7 +440,7 @@
                         const newRow = `${particle.fullRow.join(',')},${particle.classId},${particle.className}`;
                         csv_data.push(removeNewLines(newRow));
                     }
-                    redrawCanvas();
+                    redrawCanvas(particles);
                     return;
                 }
             }
@@ -408,7 +484,59 @@
             const selectedIndex = currentClassSelect.value;
             currentClass = classes[selectedIndex];
         }
+                        
+        function drawEllipse(particle) {
+            const scaleFactor = parseFloat(imageSizeSelect.value);
+            const x = particle.x * scaleFactor;
+            const y = particle.y * scaleFactor;
+            const major = Math.max(particle.major * scaleFactor, 2); // Minimum size of 2 pixels
+            const minor = Math.max(particle.minor * scaleFactor, 2); // Minimum size of 2 pixels
 
+            // Check if particle is within canvas bounds
+            if (x < 0 || x > canvas.width || y < 0 || y > canvas.height) {
+                console.log("Particle out of bounds:", x, y);
+                return;
+            }
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.translate(x, y);
+            ctx.rotate(particle.angle * Math.PI / 180);
+            ctx.scale(major / 2, minor / 2);
+            ctx.arc(0, 0, 1, 0, 2 * Math.PI);
+            ctx.restore();
+            ctx.fillStyle = hexToRGBA(particle.color, particle.opacity);
+            ctx.fill();
+
+            // Debug: draw a red dot at the center of each particle
+            ctx.fillStyle = 'red';
+            ctx.fillRect(x - 1, y - 1, 2, 2);
+        }
+
+        function redrawCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (backgroundImage) {
+                ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+            }
+            if (showParticlesCheckbox.checked) {
+                console.log("Drawing particles:", visibleParticles.length);
+                visibleParticles.forEach((particle, index) => {
+                    drawEllipse(particle);
+                    if (index < 5) {
+                        console.log("Particle details:", particle.x, particle.y, particle.major, particle.minor, particle.angle);
+                    }
+                });
+            }
+        }
+        function filterParticles() {
+            visibleParticles = currentFile === 'all' 
+                ? particles 
+                : particles.filter((_, index) => particleIndex[currentFile].includes(index));
+            console.log("Filtered particles:", visibleParticles.length);
+            console.log("Canvas size:", canvas.width, canvas.height);
+            console.log("First 5 particles:", visibleParticles.slice(0, 5));
+            redrawCanvas();
+        }
         function updateCanvasSize() {
             if (!backgroundImage) return;
 
@@ -417,6 +545,7 @@
             canvas.height = originalImageHeight * scaleFactor;
             canvas.style.width = `${canvas.width}px`;
             canvas.style.height = `${canvas.height}px`;
+            console.log("Canvas resized to:", canvas.width, canvas.height);
             redrawCanvas();
         }
 

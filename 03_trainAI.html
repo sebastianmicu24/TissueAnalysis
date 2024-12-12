@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Train AI and Process CSV</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        .file-input-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .file-input-wrapper .btn {
+            background-color: #3498db;
+            color: white;
+            padding: 8px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        #trainButton, #predictButton {
+            background-color: #2ecc71;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        #trainButton:disabled, #predictButton:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        #output {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #ecf0f1;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Train AI and Process CSV</h1>
+        <div class="controls">
+            <div class="file-input-wrapper">
+                <button class="btn">Choose Training CSV</button>
+                <input type="file" id="trainingFile" accept=".csv">
+            </div>
+            <span id="trainingFileName">No file selected</span>
+            <br>
+            <div class="file-input-wrapper">
+                <button class="btn">Choose Prediction CSV</button>
+                <input type="file" id="predictionFile" accept=".csv">
+            </div>
+            <span id="predictionFileName">No file selected</span>
+            <br>
+            <button id="trainButton" disabled>Train Model</button>
+            <button id="predictButton" disabled>Make Predictions</button>
+        </div>
+        <div id="output"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js"></script>
+    <script>
+        const trainingFileInput = document.getElementById('trainingFile');
+        const predictionFileInput = document.getElementById('predictionFile');
+        const trainButton = document.getElementById('trainButton');
+        const predictButton = document.getElementById('predictButton');
+        const outputDiv = document.getElementById('output');
+        const trainingFileName = document.getElementById('trainingFileName');
+        const predictionFileName = document.getElementById('predictionFileName');
+
+        let trainingData, predictionData, model;
+
+        const SELECTED_COLUMNS = [
+            'Area', 'Mean', 'StdDev', 'Mode', 'Min', 'Max', 'X', 'Y', 'Major', 'Minor', 'Angle',
+            'IntDen', 'Median', 'Skewness', 'Kurtosis'
+        ];
+
+        trainingFileInput.addEventListener('change', (event) => handleFileSelect(event, 'training'));
+        predictionFileInput.addEventListener('change', (event) => handleFileSelect(event, 'prediction'));
+        trainButton.addEventListener('click', trainModel);
+        predictButton.addEventListener('click', makePredictions);
+
+        function handleFileSelect(event, fileType) {
+            const file = event.target.files[0];
+            if (file) {
+                if (fileType === 'training') {
+                    trainingFileName.textContent = file.name;
+                    trainButton.disabled = false;
+                } else {
+                    predictionFileName.textContent = file.name;
+                    predictButton.disabled = false;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const csvData = e.target.result;
+                    if (fileType === 'training') {
+                        trainingData = processCSV(csvData, true);
+                    } else {
+                        predictionData = processCSV(csvData, false);
+                    }
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        function processCSV(csvData, isTraining) {
+            const rows = csvData.split('\n');
+            const headers = rows[0].split(',').map(header => header.trim());
+            
+            const data = [];
+            for (let i = 1; i < rows.length; i++) {
+                const cells = rows[i].split(',');
+                if (cells.length > 1) {
+                    const row = {};
+                    SELECTED_COLUMNS.forEach(col => {
+                        const index = headers.indexOf(col);
+                        if (index !== -1) {
+                            row[col] = parseFloat(cells[index]) || 0;
+                        }
+                    });
+                    if (isTraining) {
+                        const classIndex = headers.indexOf('Class_ID');
+                        if (classIndex !== -1) {
+                            row['Class_ID'] = parseInt(cells[classIndex]) || 0;
+                        }
+                    }
+                    data.push(row);
+                }
+            }
+            return data;
+        }
+
+        async function trainModel() {
+            outputDiv.textContent = 'Training model...';
+            
+            const X = tf.tensor2d(trainingData.map(row => SELECTED_COLUMNS.map(col => row[col])));
+            const y = tf.tensor1d(trainingData.map(row => row['Class_ID']));
+
+            model = tf.sequential();
+            model.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [SELECTED_COLUMNS.length] }));
+            model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
+            model.add(tf.layers.dense({ units: 1 }));
+
+            model.compile({ optimizer: 'adam', loss: 'meanSquaredError' });
+
+            await model.fit(X, y, {
+                epochs: 50,
+                callbacks: {
+                    onEpochEnd: (epoch, logs) => {
+                        outputDiv.textContent += `\nEpoch ${epoch + 1}: loss = ${logs.loss.toFixed(4)}`;
+                    }
+                }
+            });
+
+            outputDiv.textContent += '\nModel training completed.';
+        }
+
+        async function makePredictions() {
+            if (!model) {
+                outputDiv.textContent = 'Please train the model first.';
+                return;
+            }
+
+            outputDiv.textContent = 'Making predictions...';
+
+            const X_new = tf.tensor2d(predictionData.map(row => SELECTED_COLUMNS.map(col => row[col])));
+            const predictions = await model.predict(X_new).array();
+
+            const result = predictionData.map((row, index) => ({
+                ...row,
+                Predicted_Class_ID: Math.round(predictions[index][0])
+            }));
+
+            const csvContent = [
+                ['ID', ...SELECTED_COLUMNS, 'Predicted_Class_ID'].join(','),
+                ...result.map((row, index) => [
+                    index + 1,
+                    ...SELECTED_COLUMNS.map(col => row[col]),
+                    row.Predicted_Class_ID
+                ].join(','))
+            ].join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'predictions.csv');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+
+            outputDiv.textContent += '\nPredictions completed. Download started for predictions.csv';
+        }
+    </script>
+</body>
+</html>
