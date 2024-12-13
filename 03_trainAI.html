@@ -144,7 +144,7 @@
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const csvData = e.target.result;
-                    const headers = csvData.split('\n')[0].split(';').map(header => header.trim());
+                    const headers = csvData.split('\n')[0].split(';').map(header => header.trim()); // Split by semicolon
 
                     if (fileType === 'training') {
                         trainingFileName.textContent = file.name;
@@ -164,7 +164,8 @@
         function generateColumnCheckboxes(headers) {
             columnSelector.innerHTML = '<h3>Select Training Columns:</h3>'; // Clear previous checkboxes
             headers.forEach(header => {
-                if (header !== 'Neighbor_Density' && header !== 'Class_ID' && header !== 'Class_Name') {
+                // Exclude non-numeric and target columns
+                if (header !== 'Neighbor_Density' && header !== 'Class_ID' && header !== 'Class_Name' && header !== 'Original_Filename' && header !== 'Cytoplasmic_Original_Filename' && header !== 'ROI') {
                     const checkbox = document.createElement('input');
                     checkbox.type = 'checkbox';
                     checkbox.id = header;
@@ -192,12 +193,12 @@
 
         function processCSV(csvData, isTraining) {
             const rows = csvData.split('\n');
-            const headers = rows[0].split(';').map(header => header.trim());
+            const headers = rows[0].split(';').map(header => header.trim()); // Split by semicolon
             const neighborDensityIndex = headers.indexOf('Neighbor_Density');
         
             const data = [];
             for (let i = 1; i < rows.length; i++) {
-                const cells = rows[i].split(';');
+                const cells = rows[i].split(';'); // Split by semicolon
                 if (cells.length > 1) {
                     const row = {};
                     headers.forEach((header, index) => {
@@ -205,7 +206,7 @@
                         if (cellValue === "") {
                             row[header] = 0; // Treat empty cells as 0
                         } else {
-                            const value = parseFloat(cellValue);
+                            const value = parseFloat(cellValue.replace(',', '.')); // Replace comma with dot for decimal
                             row[header] = isNaN(value) ? cellValue : value; // If not a number, keep the original string value
                         }
                     });
@@ -218,8 +219,13 @@
                         row['Class_Name'] = '';
                     }
         
-                    if (isTraining && neighborDensityIndex !== -1) {
-                        row['Neighbor_Density'] = row['Neighbor_Density'] || 0;
+                    if (isTraining ) {
+                        if (neighborDensityIndex !== -1) {
+                            // Make sure Neighbor_Density is treated as a number
+                            row['Neighbor_Density'] = parseFloat(row['Neighbor_Density']) || 0;
+                        } else {
+                            row['Neighbor_Density'] = 0;
+                        }
                     }
                     data.push(row);
                 }
@@ -267,6 +273,11 @@
 
         async function trainModel() {
             outputDiv.textContent = 'Training model...';
+
+            // Convert 'Neighbor_Density' to numeric in trainingData
+            trainingData.forEach(row => {
+                row['Neighbor_Density'] = parseFloat(row['Neighbor_Density']) || 0;
+            });
             
             const normalizedData = normalizeData(trainingData);
             normalizeParams = selectedColumns.reduce((acc, col) => {
