@@ -221,16 +221,16 @@
 
         function processCSV(csvData) {
             const rows = csvData.split('\n');
-            csvHeaders = rows[0].split(',').map(header => header.trim());
+            csvHeaders = rows[0].split(';').map(header => header.trim());
             console.log("CSV Headers:", csvHeaders);
 
             const columnMapping = {
-                x: ['X', 'x', 'XM', 'X_CENTER'],
-                y: ['Y', 'y', 'YM', 'Y_CENTER'],
-                classId: ['Predicted_Class_ID', 'Class', 'CLASS_ID', 'Cluster'],
-                major: ['Major', 'MAJOR'],
-                minor: ['Minor', 'MINOR'],
-                angle: ['Angle', 'ANGLE']
+                x: ['Nuclear_X', 'x', 'XM', 'X_CENTER'],
+                y: ['Nuclear_Y', 'y', 'YM', 'Y_CENTER'],
+                classId: ['Class_ID', 'Class', 'CLASS_ID', 'Cluster'],
+                major: ['Nuclear_Major', 'MAJOR'],
+                minor: ['Nuclear_Minor', 'MINOR'],
+                angle: ['Nuclear_Angle', 'ANGLE']
             };
 
             const indices = {};
@@ -252,15 +252,16 @@
             particles = [];
 
             for (let i = 1; i < rows.length; i++) {
-                const cells = rows[i].split(',');
+                const cells = rows[i].split(';');
                 if (cells.length > 1) {
                     const particle = {
-                        x: (parseFloat(cells[indices.x]) || 0) * SCALE_FACTOR,
-                        y: (parseFloat(cells[indices.y]) || 0) * SCALE_FACTOR,
+                        // Use index 0 for x and y if their respective indices are not found
+                        x: indices.x !== -1 ? (parseFloat(cells[indices.x]) || 0) * SCALE_FACTOR : 0,
+                        y: indices.y !== -1 ? (parseFloat(cells[indices.y]) || 0) * SCALE_FACTOR : 0,
                         classId: parseInt(cells[indices.classId]) || 0,
-                        major: (parseFloat(cells[indices.major]) || 0) * SCALE_FACTOR,
-                        minor: (parseFloat(cells[indices.minor]) || 0) * SCALE_FACTOR,
-                        angle: parseFloat(cells[indices.angle]) || 0
+                        major: indices.major !== -1 ? (parseFloat(cells[indices.major]) || 0) * SCALE_FACTOR : 0,
+                        minor: indices.minor !== -1 ? (parseFloat(cells[indices.minor]) || 0) * SCALE_FACTOR : 0,
+                        angle: indices.angle !== -1 ? parseFloat(cells[indices.angle]) || 0 : 0
                     };
                     particles.push(particle);
                 }
@@ -297,6 +298,12 @@
 
         function drawEllipse(particle) {
             const scaleFactor = parseFloat(imageSizeSelect.value);
+
+            if (particle.x === 0 && particle.y === 0) {
+                console.warn("Particle has coordinates (0,0), it will not be drawn.");
+                return; // Skip drawing if coordinates are (0,0)
+            }
+
             ctx.save();
             ctx.beginPath();
             ctx.translate(particle.x * scaleFactor, particle.y * scaleFactor);
@@ -309,7 +316,7 @@
         }
 
         function getColorForClass(classId) {
-            const colors = ['#000099', '#0000ff'];
+            const colors = ['#000099', '#0000ff', '#990000', '#009900'];
             return colors[classId % colors.length];
         }
 

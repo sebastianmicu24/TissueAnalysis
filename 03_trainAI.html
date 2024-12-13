@@ -126,11 +126,12 @@
         let trainingData, predictionData, model, normalizeParams;
         let selectedColumns = [];
 
-        // Class mapping based on Neighbor_Density ranges
+        // Define class mapping
         const classMapping = [
-            { min: 0, max: 0.5, classId: 0, className: 'Low' },
-            { min: 0.5, max: 1.0, classId: 1, className: 'Medium' },
-            { min: 1.0, max: Infinity, classId: 2, className: 'High' }
+            { classId: 0, className: 'Hepatocytes' },
+            { classId: 1, className: 'Inflammatory' },
+            { classId: 2, className: 'Stellate' },
+            { classId: 3, className: 'Endothelial' }
         ];
 
         trainingFileInput.addEventListener('change', (event) => handleFileSelect(event, 'training'));
@@ -144,7 +145,7 @@
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const csvData = e.target.result;
-                    const headers = csvData.split('\n')[0].split(';').map(header => header.trim()); // Split by semicolon
+                    const headers = csvData.split('\n')[0].split(';').map(header => header.trim());
 
                     if (fileType === 'training') {
                         trainingFileName.textContent = file.name;
@@ -162,15 +163,14 @@
         }
 
         function generateColumnCheckboxes(headers) {
-            columnSelector.innerHTML = '<h3>Select Training Columns:</h3>'; // Clear previous checkboxes
+            columnSelector.innerHTML = '<h3>Select Training Columns:</h3>';
             headers.forEach(header => {
-                // Exclude non-numeric and target columns
-                if (header !== 'Neighbor_Density' && header !== 'Class_ID' && header !== 'Class_Name' && header !== 'Original_Filename' && header !== 'Cytoplasmic_Original_Filename' && header !== 'ROI') {
+                if (header !== 'Class_ID' && header !== 'Class_Name' && header !== 'ROI') {
                     const checkbox = document.createElement('input');
                     checkbox.type = 'checkbox';
                     checkbox.id = header;
                     checkbox.value = header;
-                    checkbox.checked = true; // Check by default
+                    checkbox.checked = true;
                     checkbox.addEventListener('change', updateSelectedColumns);
 
                     const label = document.createElement('label');
@@ -183,7 +183,7 @@
                 }
             });
 
-            updateSelectedColumns(); // Initialize selectedColumns
+            updateSelectedColumns();
         }
 
         function updateSelectedColumns() {
@@ -193,38 +193,31 @@
 
         function processCSV(csvData, isTraining) {
             const rows = csvData.split('\n');
-            const headers = rows[0].split(';').map(header => header.trim()); // Split by semicolon
-            const neighborDensityIndex = headers.indexOf('Neighbor_Density');
-        
+            const headers = rows[0].split(';').map(header => header.trim());
+            const classIdIndex = headers.indexOf('Class_ID');
+            const classNameIndex = headers.indexOf('Class_Name');
+
             const data = [];
             for (let i = 1; i < rows.length; i++) {
-                const cells = rows[i].split(';'); // Split by semicolon
+                const cells = rows[i].split(';');
                 if (cells.length > 1) {
                     const row = {};
                     headers.forEach((header, index) => {
                         const cellValue = cells[index] !== undefined ? cells[index].trim() : "";
                         if (cellValue === "") {
-                            row[header] = 0; // Treat empty cells as 0
+                            row[header] = 0;
                         } else {
-                            const value = parseFloat(cellValue.replace(',', '.')); // Replace comma with dot for decimal
-                            row[header] = isNaN(value) ? cellValue : value; // If not a number, keep the original string value
+                            const value = parseFloat(cellValue.replace(',', '.'));
+                            row[header] = isNaN(value) ? cellValue : value;
                         }
                     });
-        
-                    // Initialize to default values if columns are missing
-                    if (!('Class_ID' in row)) {
-                        row['Class_ID'] = 0;
-                    }
-                    if (!('Class_Name' in row)) {
-                        row['Class_Name'] = '';
-                    }
-        
-                    if (isTraining ) {
-                        if (neighborDensityIndex !== -1) {
-                            // Make sure Neighbor_Density is treated as a number
-                            row['Neighbor_Density'] = parseFloat(row['Neighbor_Density']) || 0;
-                        } else {
-                            row['Neighbor_Density'] = 0;
+
+                    if (isTraining) {
+                        if (classIdIndex !== -1) {
+                            row['Class_ID'] = parseFloat(cells[classIdIndex]) || 0;
+                        }
+                        if (classNameIndex !== -1) {
+                            row['Class_Name'] = cells[classNameIndex] || '';
                         }
                     }
                     data.push(row);
@@ -243,68 +236,62 @@
                     params[col] = { min, max };
                 });
             }
-        
+
             return data.map(row => {
                 const normalizedRow = {};
                 selectedColumns.forEach(col => {
                     const { min, max } = params[col];
-                    // Handle cases where min and max are the same
                     if (min === max) {
-                        normalizedRow[col] = 0; // Or 1, depending on how you want to handle this case
+                        normalizedRow[col] = 0;
                     } else {
                         normalizedRow[col] = (row[col] - min) / (max - min);
                     }
                 });
-                if ('Neighbor_Density' in row) {
-                    normalizedRow['Neighbor_Density'] = row['Neighbor_Density'];
-                }
                 return normalizedRow;
             });
         }
 
-        function getClass(neighborDensity) {
-            for (const classInfo of classMapping) {
-                if (neighborDensity >= classInfo.min && neighborDensity < classInfo.max) {
-                    return { classId: classInfo.classId, className: classInfo.className };
-                }
-            }
-            return { classId: -1, className: 'Unknown' }; // Default if no range is matched
+        function getClassName(classId) {
+            const classInfo = classMapping.find(c => c.classId === classId);
+            return classInfo ? classInfo.className : 'Unknown';
         }
 
         async function trainModel() {
             outputDiv.textContent = 'Training model...';
 
-            // Convert 'Neighbor_Density' to numeric in trainingData
-            trainingData.forEach(row => {
-                row['Neighbor_Density'] = parseFloat(row['Neighbor_Density']) || 0;
+            // Calculate normalization parameters using training data
+            normalizeParams = {};
+            selectedColumns.forEach(col => {
+                const values = trainingData.map(row => row[col]);
+                const min = Math.min(...values);
+                const max = Math.max(...values);
+                normalizeParams[col] = { min, max };
             });
-            
-            const normalizedData = normalizeData(trainingData);
-            normalizeParams = selectedColumns.reduce((acc, col) => {
-                acc[col] = {
-                    min: Math.min(...normalizedData.map(row => row[col])),
-                    max: Math.max(...normalizedData.map(row => row[col]))
-                };
-                return acc;
-            }, {});
 
-            const X = tf.tensor2d(normalizedData.map(row => selectedColumns.map(col => row[col])));
-            const y = tf.tensor1d(normalizedData.map(row => row['Neighbor_Density']));
+            // Normalize only the selected columns
+            const normalizedTrainingData = normalizeData(trainingData, normalizeParams);
 
+            // Prepare the data for TensorFlow.js
+            const X = tf.tensor2d(normalizedTrainingData.map(row => selectedColumns.map(col => row[col])));
+            const y = tf.oneHot(trainingData.map(row => row['Class_ID']), classMapping.length);
+
+            // Define the model
             model = tf.sequential();
             model.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [selectedColumns.length] }));
             model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
-            model.add(tf.layers.dense({ units: 1 }));
+            model.add(tf.layers.dense({ units: classMapping.length, activation: 'softmax' }));
 
-            model.compile({ optimizer: tf.train.adam(0.001), loss: 'meanSquaredError' });
+            // Compile the model
+            model.compile({ optimizer: tf.train.adam(0.001), loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
 
+            // Train the model
             try {
                 await model.fit(X, y, {
                     epochs: 50,
                     validationSplit: 0.2,
                     callbacks: {
                         onEpochEnd: (epoch, logs) => {
-                            outputDiv.textContent += `\nEpoch ${epoch + 1}: loss = ${logs.loss.toFixed(4)}, val_loss = ${logs.val_loss.toFixed(4)}`;
+                            outputDiv.textContent += `\nEpoch ${epoch + 1}: loss = ${logs.loss.toFixed(4)}, val_loss = ${logs.val_loss.toFixed(4)}, accuracy = ${logs.acc.toFixed(4)}, val_accuracy = ${logs.val_acc.toFixed(4)}`;
                         }
                     }
                 });
@@ -324,32 +311,37 @@
             outputDiv.textContent = 'Making predictions...';
 
             try {
-                const normalizedData = normalizeData(predictionData, normalizeParams);
-                const X_new = tf.tensor2d(normalizedData.map(row => selectedColumns.map(col => row[col])));
-                const predictions = await model.predict(X_new).array();
+                // Normalize prediction data using the same parameters as the training data
+                const normalizedPredictionData = normalizeData(predictionData, normalizeParams);
 
-                const result = predictionData.map((row, index) => {
-                    const predictedNeighborDensity = predictions[index][0];
-                    const { classId, className } = getClass(predictedNeighborDensity);
-                    return {
-                        ...row,
-                        Predicted_Neighbor_Density: predictedNeighborDensity,
-                        Class_ID: classId,
-                        Class_Name: className
-                    };
-                });
+                // Prepare the data for prediction
+                const X_new = tf.tensor2d(normalizedPredictionData.map(row => selectedColumns.map(col => row[col])));
 
+                // Make predictions
+                const predictions = model.predict(X_new);
+                
+                // Get the predicted class IDs
+                const predictedClassIds = predictions.argMax(-1).dataSync();
+
+                // Combine the prediction data with the predicted class IDs and names
+                const result = predictionData.map((row, index) => ({
+                    ...row,
+                    Class_ID: predictedClassIds[index],
+                    Class_Name: getClassName(predictedClassIds[index])
+                }));
+
+                // Generate CSV content
                 const csvContent = [
-                    ['ROI', ...selectedColumns, 'Predicted_Neighbor_Density', 'Class_ID', 'Class_Name'].join(';'),
+                    ['ROI', ...selectedColumns, 'Class_ID', 'Class_Name'].join(';'),
                     ...result.map((row, index) => [
                         row.ROI || `Cell_${index + 1}`,
                         ...selectedColumns.map(col => row[col]),
-                        row.Predicted_Neighbor_Density.toFixed(4),
                         row.Class_ID,
                         row.Class_Name
                     ].join(';'))
                 ].join('\n');
 
+                // Create a download link for the CSV file
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement('a');
                 if (link.download !== undefined) {
