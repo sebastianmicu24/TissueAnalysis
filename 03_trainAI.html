@@ -71,6 +71,19 @@
             border-radius: 4px;
             white-space: pre-wrap;
         }
+        .column-selector {
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .column-selector h3 {
+            margin-top: 0;
+        }
+        .column-selector label {
+            display: block;
+            margin-bottom: 5px;
+        }
     </style>
 </head>
 <body>
@@ -89,6 +102,10 @@
             </div>
             <span id="predictionFileName">No file selected</span>
             <br>
+            <div class="column-selector" id="columnSelector">
+                <h3>Select Training Columns:</h3>
+                <!-- Column checkboxes will be dynamically generated here -->
+            </div>
             <button id="trainButton" disabled>Train Model</button>
             <button id="predictButton" disabled>Make Predictions</button>
         </div>
@@ -104,12 +121,16 @@
         const outputDiv = document.getElementById('output');
         const trainingFileName = document.getElementById('trainingFileName');
         const predictionFileName = document.getElementById('predictionFileName');
+        const columnSelector = document.getElementById('columnSelector');
 
-        let trainingData, predictionData, model;
+        let trainingData, predictionData, model, normalizeParams;
+        let selectedColumns = [];
 
-        const SELECTED_COLUMNS = [
-            'Area', 'Mean', 'StdDev', 'Mode', 'Min', 'Max', 'X', 'Y', 'Major', 'Minor', 'Angle',
-            'IntDen', 'Median', 'Skewness', 'Kurtosis'
+        // Class mapping based on Neighbor_Density ranges
+        const classMapping = [
+            { min: 0, max: 0.5, classId: 0, className: 'Low' },
+            { min: 0.5, max: 1.0, classId: 1, className: 'Medium' },
+            { min: 1.0, max: Infinity, classId: 2, className: 'High' }
         ];
 
         trainingFileInput.addEventListener('change', (event) => handleFileSelect(event, 'training'));
@@ -120,47 +141,85 @@
         function handleFileSelect(event, fileType) {
             const file = event.target.files[0];
             if (file) {
-                if (fileType === 'training') {
-                    trainingFileName.textContent = file.name;
-                    trainButton.disabled = false;
-                } else {
-                    predictionFileName.textContent = file.name;
-                    predictButton.disabled = false;
-                }
-
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const csvData = e.target.result;
+                    const headers = csvData.split('\n')[0].split(';').map(header => header.trim());
+
                     if (fileType === 'training') {
+                        trainingFileName.textContent = file.name;
                         trainingData = processCSV(csvData, true);
+                        generateColumnCheckboxes(headers);
+                        trainButton.disabled = false;
                     } else {
+                        predictionFileName.textContent = file.name;
                         predictionData = processCSV(csvData, false);
+                        predictButton.disabled = false;
                     }
                 };
                 reader.readAsText(file);
             }
         }
 
+        function generateColumnCheckboxes(headers) {
+            columnSelector.innerHTML = '<h3>Select Training Columns:</h3>'; // Clear previous checkboxes
+            headers.forEach(header => {
+                if (header !== 'Neighbor_Density' && header !== 'Class_ID' && header !== 'Class_Name') {
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = header;
+                    checkbox.value = header;
+                    checkbox.checked = true; // Check by default
+                    checkbox.addEventListener('change', updateSelectedColumns);
+
+                    const label = document.createElement('label');
+                    label.htmlFor = header;
+                    label.textContent = header;
+
+                    columnSelector.appendChild(checkbox);
+                    columnSelector.appendChild(label);
+                    columnSelector.appendChild(document.createElement('br'));
+                }
+            });
+
+            updateSelectedColumns(); // Initialize selectedColumns
+        }
+
+        function updateSelectedColumns() {
+            selectedColumns = Array.from(columnSelector.querySelectorAll('input[type="checkbox"]:checked'))
+                .map(checkbox => checkbox.value);
+        }
+
         function processCSV(csvData, isTraining) {
             const rows = csvData.split('\n');
-            const headers = rows[0].split(',').map(header => header.trim());
-            
+            const headers = rows[0].split(';').map(header => header.trim());
+            const neighborDensityIndex = headers.indexOf('Neighbor_Density');
+        
             const data = [];
             for (let i = 1; i < rows.length; i++) {
-                const cells = rows[i].split(',');
+                const cells = rows[i].split(';');
                 if (cells.length > 1) {
                     const row = {};
-                    SELECTED_COLUMNS.forEach(col => {
-                        const index = headers.indexOf(col);
-                        if (index !== -1) {
-                            row[col] = parseFloat(cells[index]) || 0;
+                    headers.forEach((header, index) => {
+                        const cellValue = cells[index] !== undefined ? cells[index].trim() : "";
+                        if (cellValue === "") {
+                            row[header] = 0; // Treat empty cells as 0
+                        } else {
+                            const value = parseFloat(cellValue);
+                            row[header] = isNaN(value) ? cellValue : value; // If not a number, keep the original string value
                         }
                     });
-                    if (isTraining) {
-                        const classIndex = headers.indexOf('Class_ID');
-                        if (classIndex !== -1) {
-                            row['Class_ID'] = parseInt(cells[classIndex]) || 0;
-                        }
+        
+                    // Initialize to default values if columns are missing
+                    if (!('Class_ID' in row)) {
+                        row['Class_ID'] = 0;
+                    }
+                    if (!('Class_Name' in row)) {
+                        row['Class_Name'] = '';
+                    }
+        
+                    if (isTraining && neighborDensityIndex !== -1) {
+                        row['Neighbor_Density'] = row['Neighbor_Density'] || 0;
                     }
                     data.push(row);
                 }
@@ -168,29 +227,81 @@
             return data;
         }
 
+        function normalizeData(data, params) {
+            if (!params) {
+                params = {};
+                selectedColumns.forEach(col => {
+                    const values = data.map(row => row[col]);
+                    const min = Math.min(...values);
+                    const max = Math.max(...values);
+                    params[col] = { min, max };
+                });
+            }
+        
+            return data.map(row => {
+                const normalizedRow = {};
+                selectedColumns.forEach(col => {
+                    const { min, max } = params[col];
+                    // Handle cases where min and max are the same
+                    if (min === max) {
+                        normalizedRow[col] = 0; // Or 1, depending on how you want to handle this case
+                    } else {
+                        normalizedRow[col] = (row[col] - min) / (max - min);
+                    }
+                });
+                if ('Neighbor_Density' in row) {
+                    normalizedRow['Neighbor_Density'] = row['Neighbor_Density'];
+                }
+                return normalizedRow;
+            });
+        }
+
+        function getClass(neighborDensity) {
+            for (const classInfo of classMapping) {
+                if (neighborDensity >= classInfo.min && neighborDensity < classInfo.max) {
+                    return { classId: classInfo.classId, className: classInfo.className };
+                }
+            }
+            return { classId: -1, className: 'Unknown' }; // Default if no range is matched
+        }
+
         async function trainModel() {
             outputDiv.textContent = 'Training model...';
             
-            const X = tf.tensor2d(trainingData.map(row => SELECTED_COLUMNS.map(col => row[col])));
-            const y = tf.tensor1d(trainingData.map(row => row['Class_ID']));
+            const normalizedData = normalizeData(trainingData);
+            normalizeParams = selectedColumns.reduce((acc, col) => {
+                acc[col] = {
+                    min: Math.min(...normalizedData.map(row => row[col])),
+                    max: Math.max(...normalizedData.map(row => row[col]))
+                };
+                return acc;
+            }, {});
+
+            const X = tf.tensor2d(normalizedData.map(row => selectedColumns.map(col => row[col])));
+            const y = tf.tensor1d(normalizedData.map(row => row['Neighbor_Density']));
 
             model = tf.sequential();
-            model.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [SELECTED_COLUMNS.length] }));
+            model.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [selectedColumns.length] }));
             model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
             model.add(tf.layers.dense({ units: 1 }));
 
-            model.compile({ optimizer: 'adam', loss: 'meanSquaredError' });
+            model.compile({ optimizer: tf.train.adam(0.001), loss: 'meanSquaredError' });
 
-            await model.fit(X, y, {
-                epochs: 50,
-                callbacks: {
-                    onEpochEnd: (epoch, logs) => {
-                        outputDiv.textContent += `\nEpoch ${epoch + 1}: loss = ${logs.loss.toFixed(4)}`;
+            try {
+                await model.fit(X, y, {
+                    epochs: 50,
+                    validationSplit: 0.2,
+                    callbacks: {
+                        onEpochEnd: (epoch, logs) => {
+                            outputDiv.textContent += `\nEpoch ${epoch + 1}: loss = ${logs.loss.toFixed(4)}, val_loss = ${logs.val_loss.toFixed(4)}`;
+                        }
                     }
-                }
-            });
+                });
 
-            outputDiv.textContent += '\nModel training completed.';
+                outputDiv.textContent += '\nModel training completed.';
+            } catch (error) {
+                outputDiv.textContent += `\nError during training: ${error.message}`;
+            }
         }
 
         async function makePredictions() {
@@ -201,36 +312,49 @@
 
             outputDiv.textContent = 'Making predictions...';
 
-            const X_new = tf.tensor2d(predictionData.map(row => SELECTED_COLUMNS.map(col => row[col])));
-            const predictions = await model.predict(X_new).array();
+            try {
+                const normalizedData = normalizeData(predictionData, normalizeParams);
+                const X_new = tf.tensor2d(normalizedData.map(row => selectedColumns.map(col => row[col])));
+                const predictions = await model.predict(X_new).array();
 
-            const result = predictionData.map((row, index) => ({
-                ...row,
-                Predicted_Class_ID: Math.round(predictions[index][0])
-            }));
+                const result = predictionData.map((row, index) => {
+                    const predictedNeighborDensity = predictions[index][0];
+                    const { classId, className } = getClass(predictedNeighborDensity);
+                    return {
+                        ...row,
+                        Predicted_Neighbor_Density: predictedNeighborDensity,
+                        Class_ID: classId,
+                        Class_Name: className
+                    };
+                });
 
-            const csvContent = [
-                ['ID', ...SELECTED_COLUMNS, 'Predicted_Class_ID'].join(','),
-                ...result.map((row, index) => [
-                    index + 1,
-                    ...SELECTED_COLUMNS.map(col => row[col]),
-                    row.Predicted_Class_ID
-                ].join(','))
-            ].join('\n');
+                const csvContent = [
+                    ['ROI', ...selectedColumns, 'Predicted_Neighbor_Density', 'Class_ID', 'Class_Name'].join(';'),
+                    ...result.map((row, index) => [
+                        row.ROI || `Cell_${index + 1}`,
+                        ...selectedColumns.map(col => row[col]),
+                        row.Predicted_Neighbor_Density.toFixed(4),
+                        row.Class_ID,
+                        row.Class_Name
+                    ].join(';'))
+                ].join('\n');
 
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            if (link.download !== undefined) {
-                const url = URL.createObjectURL(blob);
-                link.setAttribute('href', url);
-                link.setAttribute('download', 'predictions.csv');
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                if (link.download !== undefined) {
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', 'predictions.csv');
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+
+                outputDiv.textContent += '\nPredictions completed. Download started for predictions.csv';
+            } catch (error) {
+                outputDiv.textContent += `\nError during prediction: ${error.message}`;
             }
-
-            outputDiv.textContent += '\nPredictions completed. Download started for predictions.csv';
         }
     </script>
 </body>
