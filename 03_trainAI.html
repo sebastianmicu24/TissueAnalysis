@@ -128,9 +128,9 @@
 
         // Define class mapping
         const classMapping = [
-            { classId: 0, className: 'Hepatocytes' },
-            { classId: 1, className: 'Inflammatory' },
-            { classId: 2, className: 'Stellate' },
+            { classId: 0, className: 'Unclassified' },
+            { classId: 1, className: 'Hepatocyte' },
+            { classId: 2, className: 'Other' },
             { classId: 3, className: 'Endothelial' }
         ];
 
@@ -207,7 +207,7 @@
                         if (cellValue === "") {
                             row[header] = 0;
                         } else {
-                            const value = parseFloat(cellValue.replace(',', '.'));
+                            const value = parseFloat(cellValue.replace('.', ''));
                             row[header] = isNaN(value) ? cellValue : value;
                         }
                     });
@@ -287,7 +287,7 @@
             // Train the model
             try {
                 await model.fit(X, y, {
-                    epochs: 50,
+                    epochs: 100,
                     validationSplit: 0.2,
                     callbacks: {
                         onEpochEnd: (epoch, logs) => {

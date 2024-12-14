@@ -33,7 +33,7 @@ var nucleiThreshold = 110;
 var whiteThreshold = 150;
 var maxMemory = 1024;
 var classifierPath = "C:/Users/sebas/Desktop/Microscopy/98 Data ML/Colour4.model";
-var folderPath = "C:/Users/sebas/Desktop/Microscopy/SCAF1/Analysis";
+var folderPath = "C:/Users/sebas/Desktop/Microscopy/03 Stitched/a";
 var outputBasePath = "C:/Users/sebas/Desktop/Microscopy/04 Analysis";
 var ignoreBorderVessels = true;
 var minSizeVessels = 80;
@@ -739,10 +739,16 @@ function ColourDeconvolution(imp) {
     
     try {
         IJ.run(imp, "Colour Deconvolution", "vectors=H&E hide");
-        return true;
+        var title = imp.getTitle();
+        return {
+            success: true,
+            hematoxylinImp: WindowManager.getImage(title + "-(Colour_1)"),
+            eosinImp: WindowManager.getImage(title + "-(Colour_2)"),
+            thirdImp: WindowManager.getImage(title + "-(Colour_3)")
+        };
     } catch (e) {
         IJ.log("Error in colour deconvolution: " + e);
-        return false;
+        return {success: false};
     }
 }
 
@@ -754,8 +760,7 @@ function saveROI(outputDir) {
     rm.runCommand("Save", roiPath.getAbsolutePath());
     IJ.log("ROIs saved to: " + roiPath.getAbsolutePath());
 }
-
-function saveColouredPreview(outputDir) {
+function saveColouredPreview(previewDir, baseName) {
     var rm = RoiManager.getInstance();
     if (!rm || rm.getCount() < 4) {
         IJ.log("Not enough ROIs to create preview");
@@ -801,28 +806,17 @@ function saveColouredPreview(outputDir) {
 
     imp.updateAndDraw();
 
-    // Save the preview
+    // Save the preview with title prefix
     var fs = new FileSaver(imp);
-    fs.saveAsPng(outputDir + java.io.File.separator + "preview.png");
+    fs.saveAsPng(new File(previewDir, baseName + "_preview.png").getAbsolutePath());
     
     // Close the preview window
     imp.close();
 }
 
-function addValue(rt, column, value) {
-    if (value === undefined || value === null || (typeof value === 'number' && isNaN(value))) {
-        rt.addValue(column, "");
-    } else {
-        rt.addValue(column, value);
-    }
-}
-
-function saveData(outputDir, imp, title) {
-    var hematoxylinImp = WindowManager.getImage(title +"-(Colour_1)");
+function saveData(resultsFile, imp, hematoxylinImp, eosinImp, thirdImp) {
     hematoxylinImp.hide();
-    var eosinImp = WindowManager.getImage(title +"-(Colour_2)");
     eosinImp.hide();
-    var thirdImp = WindowManager.getImage(title +"-(Colour_3)");
     thirdImp.close();
 
     var rm = RoiManager.getInstance();
@@ -888,12 +882,20 @@ function saveData(outputDir, imp, title) {
         addValue(rt, "Eosin_Histogram", eosinHistogramString);
     }
 
-    var resultsFile = new File(outputDir, "results.csv");
     rt.save(resultsFile.getAbsolutePath());
     IJ.log("Results saved to: " + resultsFile.getAbsolutePath());
 }
 
-function saveProbabilities(outputDir, stack, title) {
+
+function addValue(rt, column, value) {
+    if (value === undefined || value === null || (typeof value === 'number' && isNaN(value))) {
+        rt.addValue(column, "");
+    } else {
+        rt.addValue(column, value);
+    }
+}
+
+function saveProbabilities(probabilitiesDir, stack, baseName) {
     if (!stack) {
         IJ.log("No probability stack provided");
         return;
@@ -909,8 +911,8 @@ function saveProbabilities(outputDir, stack, title) {
             // Convert to 8-bit
             IJ.run(probImp, "8-bit", "");
             var fs = new FileSaver(probImp);
-            var filename = title + " - " + names[i-1] + ".tif";
-            fs.saveAsTiff(outputDir + java.io.File.separator + filename);
+            var filename = baseName + "_" + names[i-1] + "_probabilities.tif";
+            fs.saveAsTiff(new File(probabilitiesDir, filename).getAbsolutePath());
             IJ.log("Saved probability map " + names[i-1] + " to: " + filename);
             probImp.close();
         }
@@ -968,17 +970,38 @@ function saveAll(imp, wekaStack, outputDir) {
     // Get filename without extension
     var baseName = title.replace(/\.[^/.]+$/, "");
     
-    // Create subfolder with same name as file
-    var subDir = new File(outputDir, baseName);
-    if (!subDir.exists()) {
-        subDir.mkdirs();
+    // Create the four main directories
+    var dataDir = new File(outputDir, "Data");
+    var roiDir = new File(outputDir, "ROI");
+    var previewDir = new File(outputDir, "Preview");
+    var probabilitiesDir = new File(outputDir, "Probabilities");
+    
+    // Create directories if they don't exist
+    dataDir.mkdirs();
+    roiDir.mkdirs();
+    previewDir.mkdirs();
+    probabilitiesDir.mkdirs();
+    
+    // Save ROIs with title prefix
+    var roiPath = new File(roiDir, baseName + "_ROI.zip");
+    var rm = RoiManager.getInstance();
+    if (rm && rm.getCount() > 0) {
+        rm.runCommand("Save", roiPath.getAbsolutePath());
+        IJ.log("ROIs saved to: " + roiPath.getAbsolutePath());
     }
     
-    // Save all results in the subfolder
-    saveROI(subDir.getAbsolutePath());
-    saveColouredPreview(subDir.getAbsolutePath());
-    saveData(subDir.getAbsolutePath(), imp, title);
-    saveProbabilities(subDir.getAbsolutePath(), wekaStack, title);
+    // Save preview with title prefix
+    saveColouredPreview(previewDir, baseName);
+    
+    // Save data with title prefix
+    var resultsFile = new File(dataDir, baseName + "_data.csv");
+    var deconvResult = ColourDeconvolution(imp);
+    if (deconvResult.success) {
+        saveData(resultsFile, imp, deconvResult.hematoxylinImp, deconvResult.eosinImp, deconvResult.thirdImp);
+    }
+    
+    // Save probabilities with title prefix and wekaStack info
+    saveProbabilities(probabilitiesDir, wekaStack, baseName);
 }
 
 function cleanup() {
@@ -1044,3 +1067,13 @@ function mainLoop() {
 }
 
 mainLoop();
+// Previous code remains unchanged until saveAll function
+
+
+
+// Modified supporting functions
+
+
+
+
+// Rest of the code remains unchanged

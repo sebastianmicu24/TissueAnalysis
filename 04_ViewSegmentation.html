@@ -96,6 +96,7 @@
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -158,15 +159,20 @@
             const file = event.target.files[0];
             if (file) {
                 csvFileName.textContent = file.name;
-                const reader = new FileReader();
-
-                reader.onload = function(e) {
-                    console.log('CSV file loaded');
-                    const csvData = e.target.result;
-                    processCSV(csvData);
-                };
-
-                reader.readAsText(file);
+                Papa.parse(file, {
+                    header: true,
+                    delimiter: ';',
+                    dynamicTyping: false, // Keep values as strings to handle commas
+                    complete: function(results) {
+                        console.log('CSV file loaded');
+                        csvHeaders = results.meta.fields; // Get headers from PapaParse
+                        processCSV(results.data);
+                    },
+                    error: function(error) {
+                        console.error("Error parsing CSV:", error);
+                        alert('Error parsing CSV file. See console for details.');
+                    }
+                });
             } else {
                 csvFileName.textContent = 'No file selected';
             }
@@ -220,10 +226,8 @@
         }
 
         function processCSV(csvData) {
-            const rows = csvData.split('\n');
-            csvHeaders = rows[0].split(';').map(header => header.trim());
             console.log("CSV Headers:", csvHeaders);
-
+        
             const columnMapping = {
                 x: ['Nuclear_X', 'x', 'XM', 'X_CENTER'],
                 y: ['Nuclear_Y', 'y', 'YM', 'Y_CENTER'],
@@ -232,44 +236,55 @@
                 minor: ['Nuclear_Minor', 'MINOR'],
                 angle: ['Nuclear_Angle', 'ANGLE']
             };
-
-            const indices = {};
+        
+            const columnIndices = {};
             for (const [key, alternatives] of Object.entries(columnMapping)) {
-                indices[key] = csvHeaders.findIndex(header => alternatives.includes(header));
-                if (indices[key] === -1) {
+                for (const alt of alternatives) {
+                    if (csvHeaders.includes(alt)) {
+                        columnIndices[key] = alt;
+                        break;
+                    }
+                }
+                if (!columnIndices[key]) {
                     console.warn(`Column not found for ${key}. Alternatives tried: ${alternatives.join(', ')}`);
                 }
             }
-
-            console.log("Column indices:", indices);
-
-            if (Object.values(indices).some(index => index === -1)) {
+        
+            console.log("Column indices:", columnIndices);
+        
+            if (Object.values(columnIndices).some(index => index === undefined)) {
                 console.error('CSV file is missing some required columns');
                 alert('CSV file is missing some required columns. Please check the console for details.');
                 return;
             }
-
+        
             particles = [];
-
-            for (let i = 1; i < rows.length; i++) {
-                const cells = rows[i].split(';');
-                if (cells.length > 1) {
+        
+            csvData.forEach(row => {
+                try {
                     const particle = {
-                        // Use index 0 for x and y if their respective indices are not found
-                        x: indices.x !== -1 ? (parseFloat(cells[indices.x]) || 0) * SCALE_FACTOR : 0,
-                        y: indices.y !== -1 ? (parseFloat(cells[indices.y]) || 0) * SCALE_FACTOR : 0,
-                        classId: parseInt(cells[indices.classId]) || 0,
-                        major: indices.major !== -1 ? (parseFloat(cells[indices.major]) || 0) * SCALE_FACTOR : 0,
-                        minor: indices.minor !== -1 ? (parseFloat(cells[indices.minor]) || 0) * SCALE_FACTOR : 0,
-                        angle: indices.angle !== -1 ? parseFloat(cells[indices.angle]) || 0 : 0
+                        x: (parseFloat(row[columnIndices.x].replace(',', '.')) || 0) * SCALE_FACTOR,
+                        y: (parseFloat(row[columnIndices.y].replace(',', '.')) || 0) * SCALE_FACTOR,
+                        classId: parseInt(row[columnIndices.classId]) || 0,
+                        major: (parseFloat(row[columnIndices.major].replace(',', '.')) || 0) * SCALE_FACTOR,
+                        minor: (parseFloat(row[columnIndices.minor].replace(',', '.')) || 0) * SCALE_FACTOR,
+                        angle: parseFloat(row[columnIndices.angle].replace(',', '.')) || 0
                     };
+        
+                    if (isNaN(particle.x) || isNaN(particle.y) || isNaN(particle.major) || isNaN(particle.minor) || isNaN(particle.angle)) {
+                        console.warn("Invalid particle data:", row);
+                        return;
+                    }
+        
                     particles.push(particle);
+                } catch (error) {
+                    console.error("Error processing row:", error, row);
                 }
-            }
-
+            });
+        
             console.log(`Processed ${particles.length} particles`);
             console.log("First 5 particles:", particles.slice(0, 5));
-
+        
             redrawCanvas();
         }
 
@@ -298,12 +313,6 @@
 
         function drawEllipse(particle) {
             const scaleFactor = parseFloat(imageSizeSelect.value);
-
-            if (particle.x === 0 && particle.y === 0) {
-                console.warn("Particle has coordinates (0,0), it will not be drawn.");
-                return; // Skip drawing if coordinates are (0,0)
-            }
-
             ctx.save();
             ctx.beginPath();
             ctx.translate(particle.x * scaleFactor, particle.y * scaleFactor);
@@ -316,7 +325,7 @@
         }
 
         function getColorForClass(classId) {
-            const colors = ['#000099', '#0000ff', '#990000', '#009900'];
+            const colors = ['#000099', '#0000ff'];
             return colors[classId % colors.length];
         }
 
