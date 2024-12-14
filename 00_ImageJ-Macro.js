@@ -8,10 +8,12 @@
 // ✓ controlla qualità del csv esportato
 // ✓ risolvi il bug che rende la finestra del progresso impossibile da chiudere
 // ✓ fai test senza bordervessels
-// aggiungi user input
-// fai in modo di rinominare i nuclei del bordo invece che eliminarli
+// ✓ aggiungi user input
+// ✓ risolvi il bug che rende la finestra del progresso impossibile da chiudere
+// Migliora la funzionalità in caso di ignorevessels true
+// Risolvi preview in caso di assenza di border vessels
+// Migliora classifier per casi limite e aggregati linfocitari
 // risolvi il bug che mostra il progresso errato in caso di sottocartelle
-// risolvi il bug che rende la finestra del progresso impossibile da chiudere
 
 // Import required Java classes
 importClass(Packages.ij.IJ);
