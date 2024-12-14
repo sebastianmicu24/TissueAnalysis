@@ -1,0 +1,1808 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Page CSV Tools</title>
+    <style>
+        /* Global Styles */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        /* Navigation Styles */
+         .navigation {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+
+        .navigation button, .file-input-container input::file-selector-button, .file-input-wrapper .btn, #downloadButton, #trainButton, #predictButton, .controls button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+            font-size: medium;
+            margin: 4px 2px;
+        }
+          .navigation button:hover, .file-input-container input::file-selector-button:hover, .file-input-wrapper .btn:hover, #downloadButton:hover, #trainButton:hover, #predictButton:hover, .controls button:hover {
+            background-color: #2980b9;
+        }
+
+         .navigation button:active, .file-input-container input::file-selector-button:active, .file-input-wrapper .btn:active, #downloadButton:active, #trainButton:active, #predictButton:active, .controls button:active {
+             transform: scale(0.98);
+         }
+          #trainButton:disabled,
+        #predictButton:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        .navigation button.disabled {
+            background-color: #95a5a6;
+            color: #eee;
+            cursor: not-allowed;
+        }
+
+        /* Shared Form Elements */
+           .file-input-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .file-input-container>input {
+            margin-right: 10px;
+             font-size: medium;
+        }
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .file-input-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        input[type="file"],
+        select {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        /* Page Specific Styles */
+        .csv-name {
+            background-color: #d9d9d9;
+            border: none;
+            color: black;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: medium;
+            margin: 4px 2px;
+            border-radius: 5px;
+        }
+         #fileInput {
+            margin-bottom: 10px;
+        }
+
+        #progressBar {
+            width: 0%;
+            height: 30px;
+            background-color: #4CAF50;
+            text-align: center;
+            line-height: 30px;
+            color: white;
+        }
+
+        #progressContainer {
+            width: 100%;
+            background-color: #ddd;
+            margin-bottom: 10px;
+            display: none;
+        }
+
+        #downloadButton {
+            display: none;
+            font-size: medium;
+        }
+
+        #status {
+            margin-top: 10px;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+        }
+
+         .inputs,
+        .options {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .canvas-container {
+            overflow-x: auto;
+            overflow-y: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            max-width: 100%;
+            margin-top: 20px;
+        }
+
+        #particleCanvas {
+            border: 1px solid #ccc;
+        }
+
+        .canvas-container::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+
+        .canvas-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .canvas-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+
+        .canvas-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .addClass,
+        .Options,
+        .selectedClass {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+          h5 {
+            margin: 0;
+        }
+          .dropdown-item:hover {
+            background-color: #f0f0f0;
+        }
+           .dropdown-input {
+            width: 200px;
+            padding: 5px;
+        }
+           .dropdown-list {
+            position: absolute;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            background-color: white;
+            z-index: 1000;
+            width: 100%;
+            display: none;
+        }
+        .dropdown-item {
+            padding: 5px;
+            cursor: pointer;
+        }
+
+        #classColor {
+            padding: 2px;
+            width: 50px;
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .inputs,
+            .addClass,
+            .Options,
+            .selectedClass {
+                justify-content: center;
+            }
+        }
+
+        #trainButton,
+        #predictButton {
+             margin-top: 10px;
+             font-size: medium;
+        }
+
+          #output {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #ecf0f1;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+
+        .column-selector {
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .column-selector h3 {
+            margin-top: 0;
+        }
+
+        .column-selector label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Multi-Page CSV Tools</h1>
+        <!-- Navigation Buttons -->
+        <div class="navigation">
+            <button onclick="changePage(-1)" id="prevButton">Previous</button>
+            <button onclick="changePage(1)" id="nextButton">Next</button>
+        </div>
+
+         <!-- Page 1: Process CSV -->
+        <div id="page1" class="page active">
+            <h2>CSV Joiner</h2>
+            <div class="file-input-container">
+                <input type="file" id="fileInput" webkitdirectory directory multiple>
+                <span class="csv-name"></span>
+            </div>
+            <div id="progressContainer">
+                <div id="progressBar">0%</div>
+            </div>
+            <div id="status"></div>
+            <button id="downloadButton" style="display: none;">Download Joined CSV</button>
+        </div>
+
+        <!-- Page 2: Create Training Data -->
+          <div id="page2" class="page">
+            <h2>Manual Particle Classifier</h2>
+            <div class="controls">
+                <div class="inputs">
+                    <div class="file-input-wrapper">
+                        <button class="btn">Choose CSV</button>
+                        <input type="file" id="csvFile" accept=".csv">
+                    </div>
+                    <span id="csvFileName">No file selected</span>
+                </div>
+                <div class="inputs">
+                    <div class="file-input-wrapper">
+                        <button class="btn">Choose Image</button>
+                        <input type="file" id="backgroundImage" accept=".tif">
+                    </div>
+                    <span id="imageFileName">No file selected</span>
+                </div>
+                <div class="addClass">
+                    <input type="color" id="classColor" value="#ff0000">
+                    <input type="text" id="className" placeholder="Class Name">
+                    <button id="addClassButton">Add Class</button>
+                </div>
+                <div class="Options">
+                    <label>
+                        <input type="checkbox" id="showParticlesCheckbox">
+                        Show Particles
+                    </label>
+                    <button id="exportCSVButton">Export Classified Particles</button>
+                </div>
+                <div class="selectedClass">
+                    <h5>Selected Class:</h5>
+                    <select id="currentClassSelect"></select>
+                </div>
+                <div class="selectedFile">
+                    <h5>Original File:</h5>
+                    <div class="dropdown-container">
+                        <input type="text" id="originalFileInput" class="dropdown-input" placeholder="Search or select file">
+                        <div id="originalFileList" class="dropdown-list"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="canvas-container">
+                <canvas id="particleCanvas"></canvas>
+            </div>
+        </div>
+
+         <!-- Page 3: Train AI and Process CSV -->
+        <div id="page3" class="page">
+            <h2>Train AI and Process CSV</h2>
+            <div class="controls">
+                <div class="file-input-wrapper">
+                    <button class="btn">Choose Training CSV</button>
+                    <input type="file" id="trainingFile" accept=".csv">
+                </div>
+                <span id="trainingFileName">No file selected</span>
+                <br>
+                <div class="file-input-wrapper">
+                    <button class="btn">Choose Prediction CSV</button>
+                    <input type="file" id="predictionFile" accept=".csv">
+                </div>
+                <span id="predictionFileName">No file selected</span>
+                <br>
+                <div class="column-selector" id="columnSelector">
+                    <h3>Select Training Columns:</h3>
+                    <!-- Column checkboxes will be dynamically generated here -->
+                </div>
+                <button id="trainButton" disabled>Train Model</button>
+                <button id="predictButton" disabled>Make Predictions</button>
+            </div>
+            <div id="output"></div>
+        </div>
+       
+        <!-- Page 4: View Segmentation -->
+        <div id="page4" class="page">
+            <h2>Classified Particles Viewer</h2>
+            <div class="controls">
+                <div class="inputs">
+                    <div class="file-input-wrapper">
+                        <button class="btn">Choose CSV</button>
+                        <input type="file" id="csvFile_viewer" accept=".csv">
+                    </div>
+                    <span id="csvFileName_viewer">No file selected</span>
+                </div>
+                <div class="inputs">
+                    <div class="file-input-wrapper">
+                        <button class="btn">Choose Image</button>
+                        <input type="file" id="backgroundImage_viewer" accept=".tif">
+                    </div>
+                    <span id="imageFileName_viewer">No file selected</span>
+                </div>
+                <div class="options">
+                    <select id="imageSize_viewer">
+                        <option value="1">Original Size</option>
+                        <option value="0.5">Compressed x2</option>
+                        <option value="0.25">Compressed x4</option>
+                    </select>
+                    <label>
+                        <input type="checkbox" id="showParticles_viewer" checked>
+                        Show Particles
+                    </label>
+                </div>
+            </div>
+            <div class="canvas-container">
+                <canvas id="particleCanvas_viewer"></canvas>
+            </div>
+        </div>
+    </div>
+     <script>
+        // --- Global Variables and Functions ---
+        let currentPage = 1;
+        const pages = document.querySelectorAll('.page');
+         const prevButton = document.getElementById('prevButton');
+        const nextButton = document.getElementById('nextButton');
+
+        // Function to show a specific page
+        function showPage(pageNumber) {
+            pages.forEach(page => page.classList.remove('active'));
+            document.getElementById(`page${pageNumber}`).classList.add('active');
+            updateNavigationButtons();
+        }
+        function updateNavigationButtons() {
+            prevButton.classList.remove('disabled');
+            nextButton.classList.remove('disabled');
+            prevButton.disabled = false;
+            nextButton.disabled = false;
+
+            if (currentPage === 1) {
+                 prevButton.classList.add('disabled');
+                 prevButton.disabled = true;
+            }
+            if(currentPage === pages.length) {
+                 nextButton.classList.add('disabled');
+                 nextButton.disabled = true;
+            }
+        }
+
+
+        // Function to change page
+         function changePage(direction) {
+            currentPage += direction;
+             if (currentPage < 1) {
+                currentPage = 1;
+             } else if (currentPage > pages.length) {
+                currentPage = pages.length;
+            }
+             showPage(currentPage);
+        }
+
+         showPage(currentPage);
+
+        // Function to create a download button
+        function createDownloadButton(label, data, filename, parentElement) {
+            const downloadButton = document.createElement('button');
+            downloadButton.textContent = `Download ${label} CSV`;
+            downloadButton.onclick = () => downloadCSV(data, filename);
+            parentElement.appendChild(downloadButton);
+        }
+        // Function to download CSV data
+        function downloadCSV(data, filename) {
+            const blob = new Blob([data], {
+                type: 'text/csv;charset=utf-8;'
+            });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Initial page setup
+        showPage(currentPage);
+
+        // Function to read file content
+        function readFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsText(file);
+            });
+        }
+        // Function to parse CSV
+        function parseCSV(csv, headerWritten, filename) {
+            const lines = csv.split(/\r?\n/);
+            let header = null;
+            let rows = [];
+
+            if (!headerWritten && lines.length > 0) {
+                header = parseHeader(lines[0]);
+                lines.shift();
+            }
+
+            for (const line of lines) {
+                if (line.trim() === '') continue;
+                let parsedLine = parseLine(line, filename);
+                rows.push(parsedLine);
+            }
+
+            return { header, rows };
+        }
+
+        function parseHeader(line) {
+            return line.split(',').map(h => h.trim()).join(';');
+        }
+
+        function parseLine(line, filename) {
+            let values = [];
+            let insideQuotes = false;
+            let currentValue = '';
+
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+
+                if (char === '"') {
+                    insideQuotes = !insideQuotes;
+                    currentValue += char;
+                } else if (char === ',' && !insideQuotes) {
+                    values.push(currentValue.trim());
+                    currentValue = '';
+                } else {
+                    currentValue += char;
+                }
+            }
+            values.push(currentValue.trim());
+
+            const hemaIndex = 26;
+            const eosinIndex = 27;
+
+            let hemaMean = 0;
+            let hemaStd = 0;
+            let eosinMean = 0;
+            let eosinStd = 0;
+
+            if (hemaIndex < values.length) {
+                const hemaData = formatHistogramData(values[hemaIndex]);
+                const hemaHistogram = hemaData.slice(1, -1).split(',').map(Number);
+                hemaMean = calculateMean(hemaHistogram);
+                hemaStd = calculateStdDev(hemaHistogram, hemaMean);
+                values[hemaIndex] = hemaData;
+            }
+
+            if (eosinIndex < values.length) {
+                const eosinData = formatHistogramData(values[eosinIndex]);
+                const eosinHistogram = eosinData.slice(1, -1).split(',').map(Number);
+                eosinMean = calculateMean(eosinHistogram);
+                eosinStd = calculateStdDev(eosinHistogram, eosinMean);
+                values[eosinIndex] = eosinData;
+            }
+
+            let row = values.map(val => {
+                if (!val.startsWith('"') && !val.endsWith('"')) {
+                    const num = parseFloat(val);
+                    return isNaN(num) ? val : num.toLocaleString('de-DE');
+                }
+                return val;
+            }).join(';');
+
+            row += `;"${filename}";${hemaMean.toFixed(2)};${hemaStd.toFixed(2)};${eosinMean.toFixed(2)};${eosinStd.toFixed(2)}`;
+            return row;
+        }
+
+        function calculateMean(histogram) {
+            let weightedSum = 0;
+            let totalCount = 0;
+            for (let i = 0; i < histogram.length; i++) {
+                weightedSum += i * histogram[i];
+                totalCount += histogram[i];
+            }
+            return totalCount > 0 ? weightedSum / totalCount : 0;
+        }
+
+        function calculateStdDev(histogram, mean) {
+            let sumOfSquares = 0;
+            let totalCount = 0;
+            for (let i = 0; i < histogram.length; i++) {
+                sumOfSquares += Math.pow(i - mean, 2) * histogram[i];
+                totalCount += histogram[i];
+            }
+            return totalCount > 0 ? Math.sqrt(sumOfSquares / totalCount) : 0;
+        }
+
+        function formatHistogramData(data) {
+            const innerData = data.slice(1, -1);
+            return `"${innerData}"`;
+        }
+
+        // --- Page 1: Process CSV ---
+        const fileInput = document.getElementById('fileInput');
+        const progressBar = document.getElementById('progressBar');
+        const progressContainer = document.getElementById('progressContainer');
+        const downloadButton = document.getElementById('downloadButton');
+        const statusDiv = document.getElementById('status');
+        const csvNameSpan = document.querySelector('.csv-name');
+        fileInput.addEventListener('change', async (event) => {
+            const files = event.target.files;
+            const csvFiles = Array.from(files).filter(file => file.name.endsWith('.csv'));
+            const totalFiles = csvFiles.length;
+
+            csvNameSpan.textContent = csvFiles.length > 0 ? csvFiles[0].name : "No CSV files selected";
+            progressContainer.style.display = 'block';
+            downloadButton.style.display = 'none';
+            progressBar.style.width = '0%';
+            progressBar.textContent = '0%';
+            statusDiv.textContent = `Processing ${totalFiles} CSV files...`;
+
+            const processedData = await processFiles(csvFiles, totalFiles);
+            if (processedData) {
+                const {
+                    generalInfoRows,
+                    vesselsRows,
+                    cellsRows,
+                    header
+                } = categorizeRows(processedData);
+                const mergedCellsRows = mergeCellsRows(cellsRows, header);
+                const cellsRowsWithDensity = calculateNeighborDensity(mergedCellsRows);
+                const fixedGeneralInfoRows = addHeaderToCategory(generalInfoRows, header);
+                const fixedVesselsRows = addHeaderToCategory(vesselsRows, header);
+                createDownloadButtons(fixedGeneralInfoRows, fixedVesselsRows, cellsRowsWithDensity);
+            }
+        });
+
+        async function processFiles(csvFiles, totalFiles) {
+            let processedFiles = 0;
+            let results = [];
+            let headerWritten = false;
+            let originalHeader = null;
+            const batchSize = 10; // Adjust based on testing
+
+            const processBatch = async (batch) => {
+                const promises = batch.map(file => processFile(file));
+                const batchResults = await Promise.all(promises);
+                results.push(...batchResults);
+            };
+
+            const processFile = async (file) => {
+                try {
+                    const text = await readFile(file);
+                    const { header, rows } = parseCSV(text, headerWritten, file.name);
+
+                    if (!headerWritten) {
+                        originalHeader = header; // Capture the original header
+                        headerWritten = true;
+                    }
+
+                    let fileContent = rows.join('\n') + (rows.length > 0 ? '\n' : '');
+
+                    processedFiles++;
+                    updateProgress(processedFiles, totalFiles, file.name);
+                    return fileContent;
+
+                } catch (error) {
+                    console.error('Error processing file:', file.name, error);
+                    processedFiles++;
+                    updateProgress(processedFiles, totalFiles, file.name);
+                    return '';
+                }
+            };
+
+            for (let i = 0; i < csvFiles.length; i += batchSize) {
+                const batch = csvFiles.slice(i, i + batchSize);
+                await processBatch(batch);
+            }
+
+            // Add the original header back to the results for further processing
+            if (originalHeader) {
+                results.unshift(originalHeader + '\n');
+            }
+
+            // Delete unwanted columns after processing all files
+            const cleanedResults = deleteColumns(results);
+
+            return cleanedResults;
+        }
+
+        function categorizeRows(results) {
+            let generalInfoRows = [];
+            let vesselsRows = [];
+            let cellsRows = [];
+            let header = results[0].trim(); // Get the header from the first line of the first result
+
+            // Remove the original header from results
+            results = results.slice(1);
+
+            results.forEach(result => {
+                const lines = result.split('\n').filter(line => line.trim() !== '');
+                lines.forEach(row => {
+                    const firstCellValue = row.split(';')[0].trim();
+
+                    if (["All Nuclei", "Central Vessels", "Background / Border Vessels", "All Cytoplasm"].includes(firstCellValue)) {
+                        generalInfoRows.push(row);
+                    } else if (firstCellValue.startsWith("Vessel_") || firstCellValue.startsWith("Border_")) {
+                        vesselsRows.push(row);
+                    } else if (firstCellValue.startsWith("Nucleus_") || firstCellValue.startsWith("Cytoplasm_")) {
+                        cellsRows.push(row);
+                    }
+                });
+            });
+
+            return { generalInfoRows, vesselsRows, cellsRows, header };
+        }
+        function mergeCellsRows(cellsRows, originalHeader) {
+            const nucleusRows = {};
+            const cytoplasmRows = {};
+            const mergedRows = [];
+
+            // Separate nucleus and cytoplasm rows based on the identifier, number, and filename
+            cellsRows.forEach(row => {
+                const cells = row.split(';');
+                const identifier = cells[0].split('_')[0]; // 'Nucleus' or 'Cytoplasm'
+                const cellNumber = cells[0].split('_')[1]; // Number after the underscore
+                const filename = cells[22]; // Filename is the 23rd cell (index 22)
+                const uniqueIdentifier = `${cellNumber}_${filename}`;
+
+                if (identifier === 'Nucleus') {
+                    nucleusRows[uniqueIdentifier] = cells;
+                } else if (identifier === 'Cytoplasm') {
+                    cytoplasmRows[uniqueIdentifier] = cells;
+                }
+            });
+
+            // Create new headers
+            const baseHeaders = originalHeader.split(';');
+            const nuclearHeaders = baseHeaders.map(h => 'Nuclear_' + h);
+            const cytoplasmicHeaders = baseHeaders.map(h => 'Cytoplasmic_' + h);
+
+            // Create the new header with all columns
+            const newHeader = [
+                'ROI',
+                ...nuclearHeaders.slice(1),
+                'Original_Filename',
+                'Nuclear_Hematoxylin_Mean',
+                'Nuclear_Hematoxylin_Std',
+                'Nuclear_Eosin_Mean',
+                'Nuclear_Eosin_Std',
+                ...cytoplasmicHeaders.slice(1),
+                'Cytoplasmic_Original_Filename',
+                'Cytoplasmic_Hematoxylin_Mean',
+                'Cytoplasmic_Hematoxylin_Std',
+                'Cytoplasmic_Eosin_Mean',
+                'Cytoplasmic_Eosin_Std'
+            ].join(';');
+
+            // Add the new header to the merged rows
+            mergedRows.push(newHeader);
+
+            // Merge the rows based on matching identifiers
+            for (const id in nucleusRows) {
+                if (cytoplasmRows[id]) {
+                    const nucleusRow = nucleusRows[id];
+                    const cytoplasmRow = cytoplasmRows[id];
+
+                    // Extract the specific columns for the merged row
+                    const nucleusFilename = nucleusRow[22];
+                    const nucleusHemaMean = nucleusRow[23];
+                    const nucleusHemaStd = nucleusRow[24];
+                    const nucleusEosinMean = nucleusRow[25];
+                    const nucleusEosinStd = nucleusRow[26];
+
+                    const cytoplasmFilename = cytoplasmRow[22];
+                    const cytoplasmHemaMean = cytoplasmRow[23];
+                    const cytoplasmHemaStd = cytoplasmRow[24];
+                    const cytoplasmEosinMean = cytoplasmRow[25];
+                    const cytoplasmEosinStd = cytoplasmRow[26];
+
+                    // Merge the rows
+                    const mergedRow = [
+                        nucleusRow[0].replace('Nucleus_', 'Cell_'),
+                        ...nucleusRow.slice(1, 22),
+                        nucleusFilename,
+                        nucleusHemaMean,
+                        nucleusHemaStd,
+                        nucleusEosinMean,
+                        nucleusEosinStd,
+                        ...cytoplasmRow.slice(1, 22),
+                        cytoplasmFilename,
+                        cytoplasmHemaMean,
+                        cytoplasmHemaStd,
+                        cytoplasmEosinMean,
+                        cytoplasmEosinStd
+                    ];
+
+                    mergedRows.push(mergedRow.join(';'));
+                }
+            }
+
+            return mergedRows;
+        }
+        function calculateNeighborDensity(cellsRows) {
+            const dataRows = cellsRows.slice(1); // Exclude header row
+            const headers = cellsRows[0].split(';');
+
+            // Find indices of Nuclear_X, Nuclear_Y, and Original_Filename columns
+            const xIndex = headers.indexOf('Nuclear_X');
+            const yIndex = headers.indexOf('Nuclear_Y');
+            const filenameIndex = headers.indexOf('Original_Filename');
+
+            // Prepare an array to hold the updated rows with neighbor density
+            const updatedRows = [];
+            updatedRows.push(headers.join(';') + ';Neighbor_Density');
+
+            // Group data rows by filename
+            const rowsByFilename = {};
+            dataRows.forEach(row => {
+                const cells = row.split(';');
+                const filename = cells[filenameIndex];
+                if (!rowsByFilename[filename]) {
+                    rowsByFilename[filename] = [];
+                }
+                rowsByFilename[filename].push(row);
+            });
+
+            // Calculate neighbor density for each file separately
+            for (const filename in rowsByFilename) {
+                console.log(`Calculating neighbor density for file: ${filename}`);
+                const fileDataRows = rowsByFilename[filename];
+
+                // Create points array for the current file
+                const points = fileDataRows.map((row, index) => {
+                    const cells = row.split(';');
+                    const x = parseFloat(cells[xIndex]);
+                    const y = parseFloat(cells[yIndex]);
+
+                    if (isNaN(x) || isNaN(y)) {
+                        console.warn(`Invalid x or y at row index ${index} in file ${filename}:`, x, y);
+                        return null; // Skip this point
+                    }
+
+                    return { x, y, row: cells };
+                }).filter(point => point !== null); // Remove null points
+
+                // Grid-based approach for the current file
+                const cellSize = 30;
+                const grid = {};
+
+                // Build the grid for the current file
+                points.forEach(point => {
+                    const gridX = Math.floor(point.x / cellSize);
+                    const gridY = Math.floor(point.y / cellSize);
+                    const gridKey = `${gridX},${gridY}`;
+
+                    if (!grid[gridKey]) {
+                        grid[gridKey] = [];
+                    }
+                    grid[gridKey].push(point);
+                });
+
+                // Calculate neighbor density for the current file
+                fileDataRows.forEach((row, rowIndex) => {
+                    const cells = row.split(';');
+                    const x1 = parseFloat(cells[xIndex]);
+                    const y1 = parseFloat(cells[yIndex]);
+                    let neighborCount = 0;
+
+                    if (!isNaN(x1) && !isNaN(y1)) {
+                        const gridX = Math.floor(x1 / cellSize);
+                        const gridY = Math.floor(y1 / cellSize);
+
+                        // Iterate over neighboring grid cells
+                        for (let dx = -1; dx <= 1; dx++) {
+                            for (let dy = -1; dy <= 1; dy++) {
+                                const neighborGridKey = `${gridX + dx},${gridY + dy}`;
+                                const neighborGridCell = grid[neighborGridKey];
+
+                                if (neighborGridCell) {
+                                    neighborGridCell.forEach(otherPoint => {
+                                        const dx = otherPoint.x - x1;
+                                        const dy = otherPoint.y - y1;
+                                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                                        if (distance > 0 && distance < cellSize) {
+                                            neighborCount++;
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    // Add the neighbor density to the row
+                    cells.push(neighborCount.toString());
+                    updatedRows.push(cells.join(';'));
+                });
+            }
+
+            return updatedRows;
+        }
+        function addHeaderToCategory(rows, originalHeader) {
+            if (rows.length === 0) return [];
+
+            // Create a new header string by combining the original header with the new columns
+            const newHeader = originalHeader + ';Original_Filename;Hematoxylin_Mean;Hematoxylin_Std;Eosin_Mean;Eosin_Std';
+
+            // Add the new header to the rows
+            return [newHeader, ...rows];
+        }
+
+        function createDownloadButtons(generalInfoRows, vesselsRows, cellsRows) {
+            const page1Element = document.getElementById('page1')
+            if (generalInfoRows.length > 0) {
+                createDownloadButton('General Info', generalInfoRows.join('\n'), 'General_Info.csv', page1Element);
+            }
+            if (vesselsRows.length > 0) {
+                createDownloadButton('Vessels', vesselsRows.join('\n'), 'Vessels.csv', page1Element);
+            }
+            if (cellsRows.length > 0) {
+                createDownloadButton('Cells', cellsRows.join('\n'), 'Cells.csv', page1Element);
+            }
+        }
+        function deleteColumns(results) {
+            if (results.length === 0) return results;
+
+            // Separate the original header from the data rows
+            const originalHeader = results[0].trim();
+            const dataRows = results.slice(1);
+
+            // Find indices of columns to delete in the original header
+            const columnsToDelete = ['Perimeter', 'Circ.', 'Feret', 'AreaFraction', 'Hematoxylin_Histogram', 'Eosin_Histogram'];
+            const indicesToDelete = columnsToDelete.map(column => originalHeader.split(';').indexOf(column)).filter(index => index !== -1);
+
+            // Remove columns from the original header
+            const updatedHeader = originalHeader.split(';').filter((_, index) => !indicesToDelete.includes(index)).join(';');
+
+            // Process data rows without modifying the header
+            const cleanedDataRows = dataRows.map(result => {
+                const rows = result.split('\n').filter(row => row.trim() !== '');
+                return rows.map(row => {
+                    const values = row.split(';');
+                    // Ensure that we don't try to delete columns that don't exist
+                    if (values.length > Math.max(...indicesToDelete)) {
+                        return values.filter((_, index) => !indicesToDelete.includes(index)).join(';');
+                    }
+                    return row; // Return the row as is if it doesn't have enough columns
+                }).join('\n');
+            });
+
+            // Return the updated header and cleaned data rows as an array
+            return [updatedHeader, ...cleanedDataRows];
+        }
+
+        function updateProgress(processedFiles, totalFiles, currentFileName) {
+            const progressPercent = Math.round((processedFiles / totalFiles) * 100);
+            progressBar.style.width = progressPercent + '%';
+            progressBar.textContent = progressPercent + '%';
+            statusDiv.textContent = `Processing file ${processedFiles} of ${totalFiles}: ${currentFileName}`;
+        }
+
+
+ // --- Page 2: Create Training Data ---
+ const fileInput_training = document.getElementById('csvFile');
+    const backgroundInput_training = document.getElementById('backgroundImage');
+    const canvas_training = document.getElementById('particleCanvas');
+    const ctx_training = canvas_training.getContext('2d');
+    const classNameInput_training = document.getElementById('className');
+    const classColorInput_training = document.getElementById('classColor');
+    const addClassButton_training = document.getElementById('addClassButton');
+    const currentClassSelect_training = document.getElementById('currentClassSelect');
+    const showParticlesCheckbox_training = document.getElementById('showParticlesCheckbox');
+    const exportCSVButton_training = document.getElementById('exportCSVButton');
+    const csvFileName_training = document.getElementById('csvFileName');
+    const imageFileName_training = document.getElementById('imageFileName');
+    const originalFileInput_training = document.getElementById('originalFileInput');
+    const originalFileList_training = document.getElementById('originalFileList');
+
+    const SCALE_FACTOR = 1 / 0.29; // Convert μm to pixels
+
+    let particles_training = [];
+    let classes_training = [
+        {
+            id: 0,
+            name: 'unassigned',
+            color: '#0000ff',
+            opacity: 0.15
+        }
+    ];
+    let currentClass_training = classes_training[0];
+    let backgroundImage_training = null;
+    let originalImageWidth_training, originalImageHeight_training;
+    let csv_data_training = [];
+    let originalFiles_training = new Set();
+    let particleIndex_training = {};
+    let currentFile_training = 'all';
+    let visibleParticles_training = [];
+    let csvHeader_training = ''; // Store the header of the input CSV
+
+    fileInput_training.addEventListener('change', handleFileSelect_training);
+    backgroundInput_training.addEventListener('change', handleBackgroundSelect_training);
+    canvas_training.addEventListener('click', handleCanvasClick_training);
+    addClassButton_training.addEventListener('click', addClass_training);
+    currentClassSelect_training.addEventListener('change', updateCurrentClass_training);
+    showParticlesCheckbox_training.addEventListener('change', redrawCanvas_training);
+    exportCSVButton_training.addEventListener('click', exportClassifiedParticles_training);
+    originalFileInput_training.addEventListener('input', handleOriginalFileInput_training);
+    originalFileInput_training.addEventListener('focus', showDropdown_training);
+    document.addEventListener('click', hideDropdown_training);
+
+    function handleFileSelect_training(event) {
+        const file = event.target.files[0];
+        if (file) {
+            csvFileName_training.textContent = file.name;
+            Papa.parse(file, {
+                header: true,
+                delimiter: ';',
+                dynamicTyping: false,
+                chunk: function (results) {
+                    // Store the header from the first chunk
+                    if (!csvHeader_training) {
+                        csvHeader_training = results.meta.fields.join(';');
+                    }
+                    processChunk_training(results.data);
+                },
+                complete: function () {
+                    console.log("Parsing complete");
+                    console.log("Total particles:", particles_training.length);
+                    updateOriginalFileList_training();
+                    filterParticles_training();
+                },
+                error: function (error) {
+                    console.error("Error parsing CSV:", error);
+                }
+            });
+        } else {
+            csvFileName_training.textContent = 'No file selected';
+        }
+    }
+
+    function processChunk_training(data) {
+        data.forEach(row => {
+            if (row['Nuclear_X'] && row['Nuclear_Y']) {
+                try {
+                    const particle = {
+                        x: parseFloat(row['Nuclear_X'].replace('.', '').replace(',', '.')) * SCALE_FACTOR,
+                        y: parseFloat(row['Nuclear_Y'].replace('.', '').replace(',', '.')) * SCALE_FACTOR,
+                        major: parseFloat(row['Nuclear_Major'].replace('.', '').replace(',', '.')) * SCALE_FACTOR,
+                        minor: parseFloat(row['Nuclear_Minor'].replace('.', '').replace(',', '.')) * SCALE_FACTOR,
+                        angle: parseFloat(row['Nuclear_Angle'].replace('.', '').replace(',', '.')),
+                        color: classes_training[0].color,
+                        opacity: classes_training[0].opacity,
+                        classId: 0,
+                        className: classes_training[0].name,
+                        originalFile: row['Original_Filename'],
+                        fullRow: Object.values(row)
+                    };
+                    if (isNaN(particle.x) || isNaN(particle.y) || isNaN(particle.major) || isNaN(particle.minor) || isNaN(particle.angle)) {
+                        console.warn("Invalid particle data:", row);
+                        return;
+                    }
+
+                    particles_training.push(particle);
+                    originalFiles_training.add(row['Original_Filename']);
+
+                    if (!particleIndex_training[row['Original_Filename']]) {
+                        particleIndex_training[row['Original_Filename']] = [];
+                    }
+                    particleIndex_training[row['Original_Filename']].push(particles_training.length - 1);
+                } catch (error) {
+                    console.error("Error processing row:", error, row);
+                }
+            }
+        });
+    }
+
+    function updateOriginalFileList_training() {
+        originalFileList_training.innerHTML = '<div class="dropdown-item" data-value="all">All Files</div>';
+        originalFiles_training.forEach(file => {
+            const item = document.createElement('div');
+            item.className = 'dropdown-item';
+            item.textContent = file;
+            item.dataset.value = file;
+            item.addEventListener('click', () => selectOriginalFile_training(file));
+            originalFileList_training.appendChild(item);
+        });
+    }
+
+    function handleOriginalFileInput_training() {
+        const searchTerm = originalFileInput_training.value.toLowerCase();
+        const items = originalFileList_training.getElementsByClassName('dropdown-item');
+        for (let item of items) {
+            const text = item.textContent.toLowerCase();
+            item.style.display = text.includes(searchTerm) ? '' : 'none';
+        }
+        showDropdown_training();
+    }
+
+    function showDropdown_training() {
+        originalFileList_training.style.display = 'block';
+    }
+
+    function hideDropdown_training(event) {
+        if (!originalFileInput_training.contains(event.target) && !originalFileList_training.contains(event.target)) {
+            originalFileList_training.style.display = 'none';
+        }
+    }
+
+    function selectOriginalFile_training(file) {
+        originalFileInput_training.value = file;
+        currentFile_training = file;
+        filterParticles_training();
+        hideDropdown_training({
+            target: document.body
+        });
+    }
+
+    function filterParticles_training() {
+        visibleParticles_training = currentFile_training === 'all' ?
+            particles_training :
+            particles_training.filter((_, index) => particleIndex_training[currentFile_training].includes(index));
+        console.log("Filtered particles:", visibleParticles_training.length);
+        redrawCanvas_training();
+    }
+
+    function handleBackgroundSelect_training(event) {
+        const file = event.target.files[0];
+        if (file) {
+            imageFileName_training.textContent = file.name;
+            const reader = new FileReader();
+
+            reader.onload = function (e) {
+                loadTiffImage_training(e.target.result);
+            };
+
+            reader.onerror = function (e) {
+                console.error("Error reading file:", e);
+            };
+
+            reader.readAsArrayBuffer(file);
+        } else {
+            imageFileName_training.textContent = 'No file selected';
+        }
+    }
+
+    function loadTiffImage_training(arrayBuffer) {
+        try {
+            const ifds = UTIF.decode(arrayBuffer);
+            UTIF.decodeImage(arrayBuffer, ifds[0]);
+            const rgba = UTIF.toRGBA8(ifds[0]);
+
+            originalImageWidth_training = ifds[0].width;
+            originalImageHeight_training = ifds[0].height;
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = originalImageWidth_training;
+            tempCanvas.height = originalImageHeight_training;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            const imageData = tempCtx.createImageData(originalImageWidth_training, originalImageHeight_training);
+            imageData.data.set(rgba);
+            tempCtx.putImageData(imageData, 0, 0);
+
+            backgroundImage_training = tempCanvas;
+            canvas_training.width = originalImageWidth_training;
+            canvas_training.height = originalImageHeight_training;
+            redrawCanvas_training();
+            console.log("TIFF image loaded successfully");
+
+        } catch (error) {
+            console.error("Error loading TIFF image:", error);
+        }
+    }
+
+    function redrawCanvas_training() {
+        ctx_training.clearRect(0, 0, canvas_training.width, canvas_training.height);
+        if (backgroundImage_training) {
+            ctx_training.drawImage(backgroundImage_training, 0, 0, canvas_training.width, canvas_training.height);
+        }
+        if (showParticlesCheckbox_training.checked) {
+            console.log("Drawing particles:", visibleParticles_training.length);
+            visibleParticles_training.forEach(drawEllipse_training);
+        }
+    }
+
+    function drawEllipse_training(particle) {
+        ctx_training.save();
+        ctx_training.beginPath();
+        ctx_training.translate(particle.x, particle.y);
+        ctx_training.rotate(particle.angle * Math.PI / 180);
+        ctx_training.scale(particle.major / 2, particle.minor / 2);
+        ctx_training.arc(0, 0, 1, 0, 2 * Math.PI);
+        ctx_training.restore();
+        ctx_training.fillStyle = hexToRGBA_training(particle.color, particle.opacity);
+        ctx_training.fill();
+        ctx_training.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx_training.lineWidth = 1;
+        ctx_training.stroke();
+    }
+
+    function hexToRGBA_training(hex, opacity) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    }
+
+    function handleCanvasClick_training(event) {
+        const rect = canvas_training.getBoundingClientRect();
+        const scaleX = canvas_training.width / rect.width;
+        const scaleY = canvas_training.height / rect.height;
+        const clickX = (event.clientX - rect.left) * scaleX;
+        const clickY = (event.clientY - rect.top) * scaleY;
+
+        console.log(`Click coordinates: (${clickX}, ${clickY})`);
+        console.log(`Visible particles: ${visibleParticles_training.length}`);
+
+        for (const particle of visibleParticles_training) {
+            if (isPointInEllipse_training(clickX, clickY, particle)) {
+                console.log(`Particle selected: `, particle);
+                particle.color = currentClass_training.color;
+                particle.opacity = currentClass_training.opacity;
+                particle.classId = currentClass_training.id;
+                particle.className = currentClass_training.name;
+                if (currentClass_training.id !== 0) { // Only add to csv_data if not unassigned
+                    const newRow = `${particle.fullRow.join(';')},${particle.classId},${particle.className}`;
+                    csv_data_training.push(removeNewLines_training(newRow));
+                }
+                redrawCanvas_training();
+                return;
+            }
+        }
+        console.log('No particle selected');
+    }
+
+    function isPointInEllipse_training(x, y, ellipse) {
+        const cos = Math.cos(ellipse.angle * Math.PI / 180);
+        const sin = Math.sin(ellipse.angle * Math.PI / 180);
+        const dx = x - ellipse.x;
+        const dy = y - ellipse.y;
+        const xRotated = dx * cos + dy * sin;
+        const yRotated = -dx * sin + dy * cos;
+        return (xRotated * xRotated) / (ellipse.major * ellipse.major / 4) +
+            (yRotated * yRotated) / (ellipse.minor * ellipse.minor / 4) <= 1;
+    }
+
+    function addClass_training() {
+        const name = classNameInput_training.value.trim();
+        const color = classColorInput_training.value;
+
+        if (name && color) {
+            const newId = classes_training.length;
+            classes_training.push({
+                id: newId,
+                name,
+                color,
+                opacity: 1.0
+            });
+            updateClassSelect_training();
+            classNameInput_training.value = '';
+        }
+    }
+
+    function updateClassSelect_training() {
+        currentClassSelect_training.innerHTML = '';
+        classes_training.forEach((cls, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = cls.name;
+            option.style.backgroundColor = cls.color;
+            currentClassSelect_training.appendChild(option);
+        });
+    }
+
+    function updateCurrentClass_training() {
+        const selectedIndex = currentClassSelect_training.value;
+        currentClass_training = classes_training[selectedIndex];
+    }
+
+    function removeNewLines_training(str) {
+        return str.replace(/[\r\n]+/g, " ");
+    }
+
+    function exportClassifiedParticles_training() {
+        if (csv_data_training.length <= 1) {
+            alert('No particles have been classified yet.');
+            return;
+        }
+        // Add the header to the CSV data
+        csv_data_training.unshift(csvHeader_training + ';Class_ID;Class_Name');
+
+        const csvContent = csv_data_training.join('\n');
+        const blob = new Blob([csvContent], {
+            type: 'text/csv;charset=utf-8;'
+        });
+        const link = document.createElement('a');
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'classified_particles.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    }
+    updateClassSelect_training();
+
+        // --- Page 3: View Segmentation ---
+        const fileInput_viewer = document.getElementById('csvFile_viewer');
+        const backgroundInput_viewer = document.getElementById('backgroundImage_viewer');
+        const canvas_viewer = document.getElementById('particleCanvas_viewer');
+        const ctx_viewer = canvas_viewer.getContext('2d');
+        const imageSizeSelect_viewer = document.getElementById('imageSize_viewer');
+        const showParticlesCheckbox_viewer = document.getElementById('showParticles_viewer');
+        const csvFileName_viewer = document.getElementById('csvFileName_viewer');
+        const imageFileName_viewer = document.getElementById('imageFileName_viewer');
+
+
+        let particles_viewer = [];
+        let backgroundImage_viewer = null;
+        let originalImageWidth_viewer, originalImageHeight_viewer;
+        let csvHeaders_viewer = [];
+
+        fileInput_viewer.addEventListener('change', handleFileSelect_viewer);
+        backgroundInput_viewer.addEventListener('change', handleBackgroundSelect_viewer);
+        imageSizeSelect_viewer.addEventListener('change', updateCanvasSize_viewer);
+        showParticlesCheckbox_viewer.addEventListener('change', redrawCanvas_viewer);
+
+
+        function handleFileSelect_viewer(event) {
+            const file = event.target.files[0];
+            if (file) {
+                csvFileName_viewer.textContent = file.name;
+                Papa.parse(file, {
+                    header: true,
+                    delimiter: ';',
+                    dynamicTyping: false,
+                    complete: function (results) {
+                        console.log('CSV file loaded');
+                        csvHeaders_viewer = results.meta.fields; // Get headers from PapaParse
+                        processCSV_viewer(results.data);
+                    },
+                    error: function (error) {
+                        console.error("Error parsing CSV:", error);
+                        alert('Error parsing CSV file. See console for details.');
+                    }
+                });
+            } else {
+                csvFileName_viewer.textContent = 'No file selected';
+            }
+        }
+
+        function handleBackgroundSelect_viewer(event) {
+            const file = event.target.files[0];
+            if (file) {
+                imageFileName_viewer.textContent = file.name;
+                const reader = new FileReader();
+
+                reader.onload = function (e) {
+                    console.log('Image file loaded');
+                    loadTiffImage_viewer(e.target.result);
+                };
+
+                reader.onerror = function (e) {
+                    console.error("Error reading file:", e);
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                imageFileName_viewer.textContent = 'No file selected';
+            }
+        }
+
+        function loadTiffImage_viewer(arrayBuffer) {
+            try {
+                const ifds = UTIF.decode(arrayBuffer);
+                UTIF.decodeImage(arrayBuffer, ifds[0]);
+                const rgba = UTIF.toRGBA8(ifds[0]);
+
+                originalImageWidth_viewer = ifds[0].width;
+                originalImageHeight_viewer = ifds[0].height;
+
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = originalImageWidth_viewer;
+                tempCanvas.height = originalImageHeight_viewer;
+                const tempCtx = tempCanvas.getContext('2d');
+
+                const imageData = tempCtx.createImageData(originalImageWidth_viewer, originalImageHeight_viewer);
+                imageData.data.set(rgba);
+                tempCtx.putImageData(imageData, 0, 0);
+
+                backgroundImage_viewer = tempCanvas;
+                updateCanvasSize_viewer();
+                console.log("TIFF image loaded successfully");
+            } catch (error) {
+                console.error("Error loading TIFF image:", error);
+            }
+        }
+
+        function processCSV_viewer(csvData) {
+            console.log("CSV Headers:", csvHeaders_viewer);
+
+            const columnMapping = {
+                x: ['Nuclear_X', 'x', 'XM', 'X_CENTER'],
+                y: ['Nuclear_Y', 'y', 'YM', 'Y_CENTER'],
+                classId: ['Class_ID', 'Class', 'CLASS_ID', 'Cluster'],
+                major: ['Nuclear_Major', 'MAJOR'],
+                minor: ['Nuclear_Minor', 'MINOR'],
+                angle: ['Nuclear_Angle', 'ANGLE']
+            };
+
+            const columnIndices = {};
+            for (const [key, alternatives] of Object.entries(columnMapping)) {
+                for (const alt of alternatives) {
+                    if (csvHeaders_viewer.includes(alt)) {
+                        columnIndices[key] = alt;
+                        break;
+                    }
+                }
+                if (!columnIndices[key]) {
+                    console.warn(`Column not found for ${key}. Alternatives tried: ${alternatives.join(', ')}`);
+                }
+            }
+
+            console.log("Column indices:", columnIndices);
+
+            if (Object.values(columnIndices).some(index => index === undefined)) {
+                console.error('CSV file is missing some required columns');
+                alert('CSV file is missing some required columns. Please check the console for details.');
+                return;
+            }
+
+            particles_viewer = [];
+
+            csvData.forEach(row => {
+                try {
+                    const particle = {
+                        x: (parseFloat(row[columnIndices.x].replace(',', '.')) || 0) * SCALE_FACTOR,
+                        y: (parseFloat(row[columnIndices.y].replace(',', '.')) || 0) * SCALE_FACTOR,
+                        classId: parseInt(row[columnIndices.classId]) || 0,
+                        major: (parseFloat(row[columnIndices.major].replace(',', '.')) || 0) * SCALE_FACTOR,
+                        minor: (parseFloat(row[columnIndices.minor].replace(',', '.')) || 0) * SCALE_FACTOR,
+                        angle: parseFloat(row[columnIndices.angle].replace(',', '.')) || 0
+                    };
+
+                    if (isNaN(particle.x) || isNaN(particle.y) || isNaN(particle.major) || isNaN(particle.minor) || isNaN(particle.angle)) {
+                        console.warn("Invalid particle data:", row);
+                        return;
+                    }
+
+                    particles_viewer.push(particle);
+                } catch (error) {
+                    console.error("Error processing row:", error, row);
+                }
+            });
+
+            console.log(`Processed ${particles_viewer.length} particles`);
+            console.log("First 5 particles:", particles_viewer.slice(0, 5));
+
+            redrawCanvas_viewer();
+        }
+
+        function redrawCanvas_viewer() {
+            console.log("Redrawing canvas");
+            ctx_viewer.clearRect(0, 0, canvas_viewer.width, canvas_viewer.height);
+            if (backgroundImage_viewer) {
+                ctx_viewer.drawImage(backgroundImage_viewer, 0, 0, canvas_viewer.width, canvas_viewer.height);
+                console.log("Background image drawn");
+            } else {
+                console.log("No background image to draw");
+            }
+            if (showParticlesCheckbox_viewer.checked) {
+                console.log("Drawing particles");
+                particles_viewer.forEach((particle, index) => {
+                    try {
+                        drawEllipse_viewer(particle);
+                    } catch (error) {
+                        console.error(`Error drawing particle ${index}:`, error);
+                    }
+                });
+            } else {
+                console.log("Particles hidden");
+            }
+        }
+
+        function drawEllipse_viewer(particle) {
+            const scaleFactor = parseFloat(imageSizeSelect_viewer.value);
+            ctx_viewer.save();
+            ctx_viewer.beginPath();
+            ctx_viewer.translate(particle.x * scaleFactor, particle.y * scaleFactor);
+            ctx_viewer.rotate(particle.angle * Math.PI / 180);
+            ctx_viewer.scale(particle.major * scaleFactor / 2, particle.minor * scaleFactor / 2);
+            ctx_viewer.arc(0, 0, 1, 0, 2 * Math.PI);
+            ctx_viewer.restore();
+            ctx_viewer.fillStyle = getColorForClass_viewer(particle.classId);
+            ctx_viewer.fill();
+        }
+
+        function getColorForClass_viewer(classId) {
+            const colors = ['#000099', '#0000ff'];
+            return colors[classId % colors.length];
+        }
+
+        function updateCanvasSize_viewer() {
+            if (!backgroundImage_viewer) {
+                console.log("No background image, cannot update canvas size");
+                return;
+            }
+
+            const scaleFactor = parseFloat(imageSizeSelect_viewer.value);
+            canvas_viewer.width = originalImageWidth_viewer * scaleFactor;
+            canvas_viewer.height = originalImageHeight_viewer * scaleFactor;
+            canvas_viewer.style.width = `${canvas_viewer.width}px`;
+            canvas_viewer.style.height = `${canvas_viewer.height}px`;
+            console.log(`Canvas size updated to ${canvas_viewer.width}x${canvas_viewer.height}`);
+            redrawCanvas_viewer();
+        }
+
+        // --- Page 4: Train AI ---
+        const trainingFileInput_ai = document.getElementById('trainingFile');
+        const predictionFileInput_ai = document.getElementById('predictionFile');
+        const trainButton_ai = document.getElementById('trainButton');
+        const predictButton_ai = document.getElementById('predictButton');
+        const outputDiv_ai = document.getElementById('output');
+        const trainingFileName_ai = document.getElementById('trainingFileName');
+        const predictionFileName_ai = document.getElementById('predictionFileName');
+        const columnSelector_ai = document.getElementById('columnSelector');
+
+        let trainingData_ai, predictionData_ai, model_ai, normalizeParams_ai;
+        let selectedColumns_ai = [];
+
+        // Define class mapping
+        const classMapping_ai = [{
+            classId: 0,
+            className: 'Unclassified'
+        },
+        {
+            classId: 1,
+            className: 'Hepatocyte'
+        },
+        {
+            classId: 2,
+            className: 'Other'
+        },
+        {
+            classId: 3,
+            className: 'Endothelial'
+        }
+        ];
+
+        trainingFileInput_ai.addEventListener('change', (event) => handleFileSelect_ai(event, 'training'));
+        predictionFileInput_ai.addEventListener('change', (event) => handleFileSelect_ai(event, 'prediction'));
+        trainButton_ai.addEventListener('click', trainModel_ai);
+        predictButton_ai.addEventListener('click', makePredictions_ai);
+
+
+        function handleFileSelect_ai(event, fileType) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const csvData = e.target.result;
+                    const headers = csvData.split('\n')[0].split(';').map(header => header.trim());
+
+                    if (fileType === 'training') {
+                        trainingFileName_ai.textContent = file.name;
+                        trainingData_ai = processCSV_ai(csvData, true);
+                        generateColumnCheckboxes_ai(headers);
+                        trainButton_ai.disabled = false;
+                    } else {
+                        predictionFileName_ai.textContent = file.name;
+                        predictionData_ai = processCSV_ai(csvData, false);
+                        predictButton_ai.disabled = false;
+                    }
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        function generateColumnCheckboxes_ai(headers) {
+            columnSelector_ai.innerHTML = '<h3>Select Training Columns:</h3>';
+            headers.forEach(header => {
+                if (header !== 'Class_ID' && header !== 'Class_Name' && header !== 'ROI') {
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = header;
+                    checkbox.value = header;
+                    checkbox.checked = true;
+                    checkbox.addEventListener('change', updateSelectedColumns_ai);
+
+                    const label = document.createElement('label');
+                    label.htmlFor = header;
+                    label.textContent = header;
+
+                    columnSelector_ai.appendChild(checkbox);
+                    columnSelector_ai.appendChild(label);
+                    columnSelector_ai.appendChild(document.createElement('br'));
+                }
+            });
+            updateSelectedColumns_ai();
+        }
+
+        function updateSelectedColumns_ai() {
+            selectedColumns_ai = Array.from(columnSelector_ai.querySelectorAll('input[type="checkbox"]:checked'))
+                .map(checkbox => checkbox.value);
+        }
+
+        function processCSV_ai(csvData, isTraining) {
+            const rows = csvData.split('\n');
+            const headers = rows[0].split(';').map(header => header.trim());
+            const classIdIndex = headers.indexOf('Class_ID');
+            const classNameIndex = headers.indexOf('Class_Name');
+
+            const data = [];
+            for (let i = 1; i < rows.length; i++) {
+                const cells = rows[i].split(';');
+                if (cells.length > 1) {
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        const cellValue = cells[index] !== undefined ? cells[index].trim() : "";
+                        if (cellValue === "") {
+                            row[header] = 0;
+                        } else {
+                            const value = parseFloat(cellValue.replace('.', ''));
+                            row[header] = isNaN(value) ? cellValue : value;
+                        }
+                    });
+                    if (isTraining) {
+                        if (classIdIndex !== -1) {
+                            row['Class_ID'] = parseFloat(cells[classIdIndex]) || 0;
+                        }
+                        if (classNameIndex !== -1) {
+                            row['Class_Name'] = cells[classNameIndex] || '';
+                        }
+                    }
+                    data.push(row);
+                }
+            }
+            return data;
+        }
+
+        function normalizeData_ai(data, params) {
+            if (!params) {
+                params = {};
+                selectedColumns_ai.forEach(col => {
+                    const values = data.map(row => row[col]);
+                    const min = Math.min(...values);
+                    const max = Math.max(...values);
+                    params[col] = {
+                        min,
+                        max
+                    };
+                });
+            }
+            return data.map(row => {
+                const normalizedRow = {};
+                selectedColumns_ai.forEach(col => {
+                    const {
+                        min,
+                        max
+                    } = params[col];
+                    if (min === max) {
+                        normalizedRow[col] = 0;
+                    } else {
+                        normalizedRow[col] = (row[col] - min) / (max - min);
+                    }
+                });
+                return normalizedRow;
+            });
+        }
+
+        function getClassName_ai(classId) {
+            const classInfo = classMapping_ai.find(c => c.classId === classId);
+            return classInfo ? classInfo.className : 'Unknown';
+        }
+
+        async function trainModel_ai() {
+            outputDiv_ai.textContent = 'Training model...';
+
+            // Calculate normalization parameters using training data
+            normalizeParams_ai = {};
+            selectedColumns_ai.forEach(col => {
+                const values = trainingData_ai.map(row => row[col]);
+                const min = Math.min(...values);
+                const max = Math.max(...values);
+                normalizeParams_ai[col] = {
+                    min,
+                    max
+                };
+            });
+
+            // Normalize only the selected columns
+            const normalizedTrainingData = normalizeData_ai(trainingData_ai, normalizeParams_ai);
+
+            // Prepare the data for TensorFlow.js
+            const X = tf.tensor2d(normalizedTrainingData.map(row => selectedColumns_ai.map(col => row[col])));
+            const y = tf.oneHot(trainingData_ai.map(row => row['Class_ID']), classMapping_ai.length);
+
+            // Define the model
+            model_ai = tf.sequential();
+            model_ai.add(tf.layers.dense({
+                units: 64,
+                activation: 'relu',
+                inputShape: [selectedColumns_ai.length]
+            }));
+            model_ai.add(tf.layers.dense({
+                units: 32,
+                activation: 'relu'
+            }));
+            model_ai.add(tf.layers.dense({
+                units: classMapping_ai.length,
+                activation: 'softmax'
+            }));
+
+            // Compile the model
+            model_ai.compile({
+                optimizer: tf.train.adam(0.001),
+                loss: 'categoricalCrossentropy',
+                metrics: ['accuracy']
+            });
+
+            // Train the model
+            try {
+                await model_ai.fit(X, y, {
+                    epochs: 100,
+                    validationSplit: 0.2,
+                    callbacks: {
+                        onEpochEnd: (epoch, logs) => {
+                            outputDiv_ai.textContent += `\nEpoch ${epoch + 1}: loss = ${logs.loss.toFixed(4)}, val_loss = ${logs.val_loss.toFixed(4)}, accuracy = ${logs.acc.toFixed(4)}, val_accuracy = ${logs.val_acc.toFixed(4)}`;
+                        }
+                    }
+                });
+
+                outputDiv_ai.textContent += '\nModel training completed.';
+            } catch (error) {
+                outputDiv_ai.textContent += `\nError during training: ${error.message}`;
+            }
+        }
+
+        async function makePredictions_ai() {
+            if (!model_ai) {
+                outputDiv_ai.textContent = 'Please train the model first.';
+                return;
+            }
+            outputDiv_ai.textContent = 'Making predictions...';
+
+            try {
+                // Normalize prediction data using the same parameters as the training data
+                const normalizedPredictionData = normalizeData_ai(predictionData_ai, normalizeParams_ai);
+
+                // Prepare the data for prediction
+                const X_new = tf.tensor2d(normalizedPredictionData.map(row => selectedColumns_ai.map(col => row[col])));
+
+                // Make predictions
+                const predictions = model_ai.predict(X_new);
+
+                // Get the predicted class IDs
+                const predictedClassIds = predictions.argMax(-1).dataSync();
+
+                // Combine the prediction data with the predicted class IDs and names
+                const result = predictionData_ai.map((row, index) => ({
+                    ...row,
+                    Class_ID: predictedClassIds[index],
+                    Class_Name: getClassName_ai(predictedClassIds[index])
+                }));
+
+                // Generate CSV content
+                const csvContent = [
+                    ['ROI', ...selectedColumns_ai, 'Class_ID', 'Class_Name'].join(';'),
+                    ...result.map((row, index) => [
+                        row.ROI || `Cell_${index + 1}`,
+                        ...selectedColumns_ai.map(col => row[col]),
+                        row.Class_ID,
+                        row.Class_Name
+                    ].join(';'))
+                ].join('\n');
+
+                // Create a download link for the CSV file
+                const blob = new Blob([csvContent], {
+                    type: 'text/csv;charset=utf-8;'
+                });
+                const link = document.createElement('a');
+                if (link.download !== undefined) {
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', 'predictions.csv');
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+
+                outputDiv_ai.textContent += '\nPredictions completed. Download started for predictions.csv';
+            } catch (error) {
+                outputDiv_ai.textContent += `\nError during prediction: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+
+</html>
