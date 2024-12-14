@@ -27,6 +27,7 @@ importClass(Packages.ij.io.FileSaver);
 importClass(Packages.ij.measure.ResultsTable);
 importClass(Packages.ij.measure.Measurements);
 importClass(Packages.ij.process.ImageStatistics);
+importClass(Packages.fiji.util.gui.GenericDialogPlus);
 
 // Configuration parameters
 var nucleiThreshold = 110;
@@ -38,7 +39,7 @@ var outputBasePath = "C:/Users/sebas/Desktop/Microscopy/04 Analysis";
 var ignoreBorderVessels = true;
 var minSizeVessels = 80;
 var maxSizeVessels = "Infinity"
-var minSizeNuclei = 4;
+var minSizeNuclei = 5;
 var maxSizeNuclei = "Infinity";
 var nucleiRoundness = 0;
 
@@ -208,6 +209,55 @@ function countImagesInDirectory(dir) {
         }
     }
     return count;
+}
+
+function getUserInput() {
+    var gd = new GenericDialogPlus("Analysis Parameters");
+    
+    // Add paths
+    gd.addDirectoryField("Input Folder:", folderPath);
+    gd.addDirectoryField("Output Base Path:", outputBasePath);
+    gd.addFileField("Classifier Path:", classifierPath);
+    
+    // Add numeric parameters
+    gd.addNumericField("Nuclei Threshold (0-255):", nucleiThreshold, 0);
+    gd.addNumericField("White Threshold (0-255):", whiteThreshold, 0);
+    gd.addNumericField("Max Memory (tile size):", maxMemory, 0);
+    
+    // Add size parameters
+    gd.addNumericField("Min Size Vessels (px²):", minSizeVessels, 0);
+    gd.addStringField("Max Size Vessels:", maxSizeVessels);
+    gd.addNumericField("Min Size Nuclei (px²):", minSizeNuclei, 0);
+    gd.addStringField("Max Size Nuclei:", maxSizeNuclei);
+    
+    // Add other parameters
+    gd.addNumericField("Nuclei Roundness (0.00-1.00):", nucleiRoundness, 2);
+    gd.addCheckbox("Ignore Border Vessels", ignoreBorderVessels);
+    
+    gd.showDialog();
+    
+    if (gd.wasCanceled()) {
+        return false;
+    }
+    
+    // Get the values
+    folderPath = gd.getNextString();
+    outputBasePath = gd.getNextString();
+    classifierPath = gd.getNextString();
+    
+    nucleiThreshold = gd.getNextNumber();
+    whiteThreshold = gd.getNextNumber();
+    maxMemory = gd.getNextNumber();
+    
+    minSizeVessels = gd.getNextNumber();
+    maxSizeVessels = gd.getNextString();
+    minSizeNuclei = gd.getNextNumber();
+    maxSizeNuclei = gd.getNextString();
+    
+    nucleiRoundness = gd.getNextNumber();
+    ignoreBorderVessels = gd.getNextBoolean();
+    
+    return true;
 }
 
 // Main processing functions
@@ -1041,6 +1091,11 @@ function cleanup() {
 function mainLoop() {
     shouldStop = false;
     
+    // Get user input before starting
+    if (!getUserInput()) {
+        return;
+    }
+    
     // Validate paths before starting
     if (!validatePaths()) {
         return;
@@ -1076,4 +1131,41 @@ mainLoop();
 
 
 
-// Rest of the code remains unchanged
+// Rest of the code remains unchanged// [Previous code until wekaInitialization function remains unchanged]
+
+// Image processing functions
+function wekaInitialization(image) {
+    progressDialog.showStatus("Initializing Segmentation...");
+    IJ.log("Initializing Segmentation");
+    try {
+        var xTiles = Math.ceil(image.getWidth() / maxMemory);
+        var yTiles = Math.ceil(image.getHeight() / maxMemory);
+        var zTiles = 0;
+        
+        // Create segmentator with image
+        var segmentator = new WekaSegmentation(image);
+        
+        // Set field of view and membrane settings
+        segmentator.setMaximumSigma(8.0);
+        segmentator.setMinimumSigma(2.0);
+        segmentator.setMembraneThickness(2);
+        segmentator.setMembranePatchSize(15);
+        
+        // Load classifier
+        if (!segmentator.loadClassifier(classifierPath)) {
+            throw "Failed to load classifier";
+        }
+
+        return {
+            segmentator: segmentator,
+            xTiles: xTiles,
+            yTiles: yTiles,
+            zTiles: zTiles
+        };
+    } catch (e) {
+        IJ.log("Error in Weka initialization: " + e);
+        return null;
+    }
+}
+mainLoop();
+
