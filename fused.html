@@ -750,16 +750,16 @@
                 'ROI',
                 ...nuclearHeaders.slice(1),
                 'Original_Filename',
-                'Nuclear_Hematoxylin_Mean',
-                'Nuclear_Hematoxylin_Std',
-                'Nuclear_Eosin_Mean',
-                'Nuclear_Eosin_Std',
-                ...cytoplasmicHeaders.slice(1),
+            'Nuclear_Hematoxylin_Mean', 
+            'Nuclear_Hematoxylin_Std', 
+            'Nuclear_Eosin_Mean', 
+            'Nuclear_Eosin_Std',
+...cytoplasmicHeaders.slice(1),
                 'Cytoplasmic_Original_Filename',
-                'Cytoplasmic_Hematoxylin_Mean',
-                'Cytoplasmic_Hematoxylin_Std',
-                'Cytoplasmic_Eosin_Mean',
-                'Cytoplasmic_Eosin_Std'
+            'Cytoplasmic_Hematoxylin_Mean', 
+            'Cytoplasmic_Hematoxylin_Std', 
+            'Cytoplasmic_Eosin_Mean', 
+            'Cytoplasmic_Eosin_Std'
             ].join(';');
 
             // Add the new header to the merged rows
@@ -820,8 +820,8 @@
             const updatedRows = [];
             updatedRows.push(headers.join(';') + ';Neighbor_Density');
 
-            // Group data rows by filename
-            const rowsByFilename = {};
+                        // Group data rows by filename
+                        const rowsByFilename = {};
             dataRows.forEach(row => {
                 const cells = row.split(';');
                 const filename = cells[filenameIndex];
@@ -939,7 +939,7 @@
             const columnsToDelete = ['Perimeter', 'Circ.', 'Feret', 'AreaFraction', 'Hematoxylin_Histogram', 'Eosin_Histogram'];
             const indicesToDelete = columnsToDelete.map(column => originalHeader.split(';').indexOf(column)).filter(index => index !== -1);
 
-            // Remove columns from the original header
+        // Remove columns from the original header
             const updatedHeader = originalHeader.split(';').filter((_, index) => !indicesToDelete.includes(index)).join(';');
 
             // Process data rows without modifying the header
@@ -1016,14 +1016,14 @@
     document.addEventListener('click', hideDropdown_training);
 
     function handleFileSelect_training(event) {
-        const file = event.target.files[0];
-        if (file) {
-            csvFileName_training.textContent = file.name;
-            Papa.parse(file, {
-                header: true,
-                delimiter: ';',
-                dynamicTyping: false,
-                chunk: function (results) {
+            const file = event.target.files[0];
+            if (file) {
+                csvFileName_training.textContent = file.name;
+                Papa.parse(file, {
+                    header: true,
+                    delimiter: ';',
+                    dynamicTyping: false,
+                    chunk: function (results) {
                     // Store the header from the first chunk
                     if (!csvHeader_training) {
                         csvHeader_training = results.meta.fields.join(';');
@@ -1037,7 +1037,7 @@
                     filterParticles_training();
                 },
                 error: function (error) {
-                    console.error("Error parsing CSV:", error);
+                        console.error("Error parsing CSV:", error);
                 }
             });
         } else {
@@ -1075,7 +1075,7 @@
                     }
                     particleIndex_training[row['Original_Filename']].push(particles_training.length - 1);
                 } catch (error) {
-                    console.error("Error processing row:", error, row);
+                        console.error("Error processing row:", error, row);
                 }
             }
         });
@@ -1110,8 +1110,8 @@
     function hideDropdown_training(event) {
         if (!originalFileInput_training.contains(event.target) && !originalFileList_training.contains(event.target)) {
             originalFileList_training.style.display = 'none';
-        }
-    }
+                    }
+                }
 
     function selectOriginalFile_training(file) {
         originalFileInput_training.value = file;
@@ -1131,9 +1131,9 @@
     }
 
     function handleBackgroundSelect_training(event) {
-        const file = event.target.files[0];
-        if (file) {
-            imageFileName_training.textContent = file.name;
+            const file = event.target.files[0];
+            if (file) {
+                imageFileName_training.textContent = file.name;
             const reader = new FileReader();
 
             reader.onload = function (e) {
@@ -1523,8 +1523,8 @@
             redrawCanvas_viewer();
         }
 
-        // --- Page 4: Train AI ---
-        const trainingFileInput_ai = document.getElementById('trainingFile');
+// --- Page 4: Train AI ---
+const trainingFileInput_ai = document.getElementById('trainingFile');
         const predictionFileInput_ai = document.getElementById('predictionFile');
         const trainButton_ai = document.getElementById('trainButton');
         const predictButton_ai = document.getElementById('predictButton');
@@ -1532,276 +1532,480 @@
         const trainingFileName_ai = document.getElementById('trainingFileName');
         const predictionFileName_ai = document.getElementById('predictionFileName');
         const columnSelector_ai = document.getElementById('columnSelector');
-
-        let trainingData_ai, predictionData_ai, model_ai, normalizeParams_ai;
-        let selectedColumns_ai = [];
-
-        // Define class mapping
-        const classMapping_ai = [{
-            classId: 0,
-            className: 'Unclassified'
-        },
-        {
-            classId: 1,
-            className: 'Hepatocyte'
-        },
-        {
-            classId: 2,
-            className: 'Other'
-        },
-        {
-            classId: 3,
-            className: 'Endothelial'
-        }
-        ];
-
-        trainingFileInput_ai.addEventListener('change', (event) => handleFileSelect_ai(event, 'training'));
-        predictionFileInput_ai.addEventListener('change', (event) => handleFileSelect_ai(event, 'prediction'));
-        trainButton_ai.addEventListener('click', trainModel_ai);
-        predictButton_ai.addEventListener('click', makePredictions_ai);
-
-
-        function handleFileSelect_ai(event, fileType) {
+        let trainingData_ai = null;
+        let predictionData_ai = null;
+        let classNames_ai = {}; // Store class names
+        let availableColumns_ai = []; // Store the available columns
+         
+         
+        // File input handlers
+        trainingFileInput_ai.addEventListener('change', (event) => {
             const file = event.target.files[0];
             if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const csvData = e.target.result;
-                    const headers = csvData.split('\n')[0].split(';').map(header => header.trim());
+                trainingFileName_ai.textContent = file.name;
+                Papa.parse(file, {
+                    header: true,
+                    delimiter: ';',
+                    dynamicTyping: false,
+                    preview: 1,
+                    complete: function (results) {
+                        console.log('First chunk of training data:', results.data);
+                        availableColumns_ai = results.meta.fields.filter(field => field.toLowerCase() !== 'class_id' && field.toLowerCase() !== 'class_name');
+                        console.log('Available columns:', availableColumns_ai);
 
-                    if (fileType === 'training') {
-                        trainingFileName_ai.textContent = file.name;
-                        trainingData_ai = processCSV_ai(csvData, true);
-                        generateColumnCheckboxes_ai(headers);
+                        // Populate the column selector
+                        populateColumnSelector(availableColumns_ai);
+                    },
+                    error: function (error) {
+                        console.error('Error parsing training file:', error);
+                        outputDiv_ai.textContent = 'Error loading training file: ' + error.message;
+                    }
+                });
+                Papa.parse(file, {
+                    header: true,
+                    delimiter: ';',
+                    dynamicTyping: false,
+                    complete: function (results) {
+                        trainingData_ai = results.data;
                         trainButton_ai.disabled = false;
-                    } else {
-                        predictionFileName_ai.textContent = file.name;
-                        predictionData_ai = processCSV_ai(csvData, false);
+                        populateClassNames(trainingData_ai);
+                    },
+                });
+            }
+        });
+
+        predictionFileInput_ai.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                predictionFileName_ai.textContent = file.name;
+                Papa.parse(file, {
+                    header: true,
+                    delimiter: ';',
+                    dynamicTyping: false,
+                    complete: function (results) {
+                        console.log('Prediction data loaded:', results.data.length, 'rows');
+                        predictionData_ai = results.data;
                         predictButton_ai.disabled = false;
+                    },
+                    error: function (error) {
+                        console.error('Error parsing prediction file:', error);
+                        outputDiv_ai.textContent = 'Error loading prediction file: ' + error.message;
                     }
-                };
-                reader.readAsText(file);
+                });
             }
-        }
+        });
 
-        function generateColumnCheckboxes_ai(headers) {
-            columnSelector_ai.innerHTML = '<h3>Select Training Columns:</h3>';
-            headers.forEach(header => {
-                if (header !== 'Class_ID' && header !== 'Class_Name' && header !== 'ROI') {
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    checkbox.id = header;
-                    checkbox.value = header;
-                    checkbox.checked = true;
-                    checkbox.addEventListener('change', updateSelectedColumns_ai);
-
-                    const label = document.createElement('label');
-                    label.htmlFor = header;
-                    label.textContent = header;
-
-                    columnSelector_ai.appendChild(checkbox);
-                    columnSelector_ai.appendChild(label);
-                    columnSelector_ai.appendChild(document.createElement('br'));
+        function populateClassNames(data) {
+            console.log('Populating class names...');
+            classNames_ai = {};
+            data.forEach(row => {
+                if (row.Class_ID && row.Class_Name) {
+                    classNames_ai[parseInt(row.Class_ID)] = row.Class_Name;
                 }
             });
-            updateSelectedColumns_ai();
+            console.log('Class Names:', classNames_ai)
         }
 
-        function updateSelectedColumns_ai() {
-            selectedColumns_ai = Array.from(columnSelector_ai.querySelectorAll('input[type="checkbox"]:checked'))
-                .map(checkbox => checkbox.value);
+        function populateColumnSelector(columns) {
+    columnSelector_ai.innerHTML = ''; // Clear existing checkboxes
+
+    columns.forEach(column => {
+        // Create a label and checkbox for each column
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.name = 'column';
+        checkbox.value = column;
+        checkbox.checked = false; // Set to false for unchecked
+
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(column));
+        columnSelector_ai.appendChild(label);
+    });
+}
+        
+function getSelectedColumns() {
+            // Get the selected columns from the checkboxes
+            const selectedColumns = Array.from(columnSelector_ai.querySelectorAll('input:checked')).map(input => input.value);
+            console.log('Selected columns for training:', selectedColumns);
+            return selectedColumns;
         }
 
-        function processCSV_ai(csvData, isTraining) {
-            const rows = csvData.split('\n');
-            const headers = rows[0].split(';').map(header => header.trim());
-            const classIdIndex = headers.indexOf('Class_ID');
-            const classNameIndex = headers.indexOf('Class_Name');
+        function preprocessData(data, selectedColumns, isTraining = true) {
+    console.log(`Preprocessing ${isTraining ? 'training' : 'prediction'} data...`);
+    console.log('Selected columns for preprocessing:', selectedColumns);
 
-            const data = [];
-            for (let i = 1; i < rows.length; i++) {
-                const cells = rows[i].split(';');
-                if (cells.length > 1) {
-                    const row = {};
-                    headers.forEach((header, index) => {
-                        const cellValue = cells[index] !== undefined ? cells[index].trim() : "";
-                        if (cellValue === "") {
-                            row[header] = 0;
-                        } else {
-                            const value = parseFloat(cellValue.replace('.', ''));
-                            row[header] = isNaN(value) ? cellValue : value;
-                        }
-                    });
-                    if (isTraining) {
-                        if (classIdIndex !== -1) {
-                            row['Class_ID'] = parseFloat(cells[classIdIndex]) || 0;
-                        }
-                        if (classNameIndex !== -1) {
-                            row['Class_Name'] = cells[classNameIndex] || '';
-                        }
-                    }
-                    data.push(row);
-                }
+    return data.map(row => {
+        const processedRow = {};
+
+        // Process selected columns
+        selectedColumns.forEach(col => {
+            let value = row[col];
+            console.log("Original Value:", value); // Log original value
+
+            if (typeof value === 'string') {
+                // Handle German number format and conversion
+                value = parseFloat(value.replace('.', '').replace(',', '.'));
             }
-            return data;
+
+            if (isNaN(value)) {
+                console.log(`Value for column ${col} is NaN after conversion.`);
+                return null; // Mark row for removal due to NaN in selected column
+            }
+
+            console.log("Converted Value:", value); // Log converted value
+
+            processedRow[col] = value;
+            console.log("Column:", col, "Value:", processedRow[col], "isNaN:", isNaN(processedRow[col]));
+        });
+
+        if (isTraining) {
+        // Handle Class_ID for training data (case-insensitive)
+        const classIdKey = Object.keys(row).find(key => key.toLowerCase() === 'class_id');
+
+        // Log the keys found in the row
+        console.log("Keys in current row:", Object.keys(row));
+
+        let classIdValue = row[classIdKey];
+
+        console.log("Class_ID Key:", classIdKey); // Log the found Class_ID key
+        console.log("Original Class_ID Value:", classIdValue); // Log original Class_ID value
+
+            if (typeof classIdValue === 'string') {
+                classIdValue = classIdValue.trim(); // Trim whitespace
+                // Ensure the value can be parsed as an integer
+                if (!/^-?\d+$/.test(classIdValue)) {
+                    console.log(`Class_ID is not a valid integer. Skipping row.`);
+                    return null; // Mark row for removal due to invalid Class_ID
+                }
+                classIdValue = parseInt(classIdValue); // Parse as integer
+            }
+
+            if (classIdValue === undefined || classIdValue === null || isNaN(classIdValue)) {
+                console.log(`Class_ID is undefined, null, or NaN after conversion. Skipping row.`);
+                return null; // Mark row for removal due to invalid Class_ID
+            }
+
+            processedRow['Class_ID'] = classIdValue;
+            console.log("Class_ID:", processedRow['Class_ID'], "isNaN:", isNaN(processedRow['Class_ID']));
         }
 
-        function normalizeData_ai(data, params) {
-            if (!params) {
-                params = {};
-                selectedColumns_ai.forEach(col => {
-                    const values = data.map(row => row[col]);
-                    const min = Math.min(...values);
-                    const max = Math.max(...values);
-                    params[col] = {
-                        min,
-                        max
+        // Log the entire processed row before filtering
+        console.log("Processed Row:", processedRow);
+
+        return processedRow;
+    }).filter(row => row !== null); // Filter out rows marked as null
+}
+
+// Decision Tree implementation
+        class DecisionTree {
+            constructor(maxDepth = 5) {
+                this.maxDepth = maxDepth;
+                this.root = null;
+            }
+
+            fit(X, y) {
+                console.log('Fitting Decision Tree...');
+                this.root = this.buildTree(X, y, 0);
+                console.log('Decision Tree fitted.');
+            }
+
+            buildTree(X, y, depth) {
+                if (depth >= this.maxDepth || new Set(y).size === 1) {
+                    return {
+                        prediction: this.mostCommon(y)
                     };
-                });
+                }
+
+                const bestSplit = this.findBestSplit(X, y);
+                if (!bestSplit) {
+                    console.log('No best split found, returning most common prediction.');
+                    return {
+                        prediction: this.mostCommon(y)
+                    };
+                }
+
+                const {
+                    feature,
+                    threshold,
+                    leftX,
+                    leftY,
+                    rightX,
+                    rightY
+                } = bestSplit;
+
+                return {
+                    feature,
+                    threshold,
+                    left: this.buildTree(leftX, leftY, depth + 1),
+                    right: this.buildTree(rightX, rightY, depth + 1)
+                };
             }
-            return data.map(row => {
-                const normalizedRow = {};
-                selectedColumns_ai.forEach(col => {
-                    const {
-                        min,
-                        max
-                    } = params[col];
-                    if (min === max) {
-                        normalizedRow[col] = 0;
-                    } else {
-                        normalizedRow[col] = (row[col] - min) / (max - min);
+
+            findBestSplit(X, y) {
+                let bestGini = Infinity;
+                let bestSplit = null;
+
+                // Sample subset of features for randomness
+                const features = Object.keys(X[0]);
+                const sampleSize = Math.floor(Math.sqrt(features.length));
+                const sampledFeatures = this.shuffle(features).slice(0, sampleSize);
+
+                for (const feature of sampledFeatures) {
+                    const values = X.map(x => x[feature]).sort((a, b) => a - b);
+
+                    for (let i = 0; i < values.length - 1; i++) {
+                        const threshold = (values[i] + values[i + 1]) / 2;
+
+                        const split = this.splitData(X, y, feature, threshold);
+                        const gini = this.calculateGini(split.leftY, split.rightY);
+
+                        if (gini < bestGini) {
+                            bestGini = gini;
+                            bestSplit = {
+                                feature,
+                                threshold,
+                                ...split
+                            };
+                        }
                     }
-                });
-                return normalizedRow;
-            });
+                }
+                return bestSplit;
+            }
+
+            splitData(X, y, feature, threshold) {
+                const leftX = [];
+                const leftY = [];
+                const rightX = [];
+                const rightY = [];
+
+                for (let i = 0; i < X.length; i++) {
+                    if (X[i][feature] <= threshold) {
+                        leftX.push(X[i]);
+                        leftY.push(y[i]);
+                    } else {
+                        rightX.push(X[i]);
+                        rightY.push(y[i]);
+                    }
+                }
+
+                return {
+                    leftX,
+                    leftY,
+                    rightX,
+                    rightY
+                };
+            }
+
+            calculateGini(leftY, rightY) {
+                const calculateGiniImpurity = (y) => {
+                    if (y.length === 0) return 0;
+                    const counts = {};
+                    y.forEach(val => counts[val] = (counts[val] || 0) + 1);
+                    return 1 - Object.values(counts).reduce((acc, count) =>
+                        acc + Math.pow(count / y.length, 2), 0);
+                };
+
+                const totalSize = leftY.length + rightY.length;
+                return (leftY.length / totalSize) * calculateGiniImpurity(leftY) +
+                    (rightY.length / totalSize) * calculateGiniImpurity(rightY);
+            }
+
+            predict(X) {
+                return Array.isArray(X) ? X.map(x => this.predictSingle(x)) : this.predictSingle(X);
+            }
+
+            predictSingle(x) {
+                let node = this.root;
+                while (node.left) {
+                    if (x[node.feature] <= node.threshold) {
+                        node = node.left;
+                    } else {
+                        node = node.right;
+                    }
+                }
+                return node.prediction;
+            }
+
+            mostCommon(arr) {
+                const counts = {};
+                arr.forEach(val => counts[val] = (counts[val] || 0) + 1);
+                return Object.entries(counts).reduce((a, b) => b[1] > a[1] ? b : a)[0];
+            }
+
+            shuffle(array) {
+                return array.sort(() => Math.random() - 0.5);
+            }
         }
 
-        function getClassName_ai(classId) {
-            const classInfo = classMapping_ai.find(c => c.classId === classId);
-            return classInfo ? classInfo.className : 'Unknown';
+        // Random Forest implementation
+        class RandomForest {
+            constructor(nEstimators = 10, maxDepth = 5) {
+                this.nEstimators = nEstimators;
+                this.maxDepth = maxDepth;
+                this.trees = [];
+            }
+
+            fit(X, y) {
+                console.log(`Training Random Forest with ${this.nEstimators} trees...`);
+                for (let i = 0; i < this.nEstimators; i++) {
+                    const tree = new DecisionTree(this.maxDepth);
+                    const {
+                        bootstrapX,
+                        bootstrapY
+                    } = this.bootstrap(X, y);
+                    tree.fit(bootstrapX, bootstrapY);
+                    this.trees.push(tree);
+                    console.log(`Tree ${i + 1}/${this.nEstimators} trained`);
+                }
+                console.log('Random Forest training completed.');
+            }
+
+            bootstrap(X, y) {
+                const bootstrapX = [];
+                const bootstrapY = [];
+                const n = X.length;
+
+                for (let i = 0; i < n; i++) {
+                    const idx = Math.floor(Math.random() * n);
+                    bootstrapX.push(X[idx]);
+                    bootstrapY.push(y[idx]);
+                }
+
+                return {
+                    bootstrapX,
+                    bootstrapY
+                };
+            }
+
+            predict(X) {
+                console.log('Making predictions...');
+                return X.map(x => {
+                    const predictions = this.trees.map(tree => tree.predict(x));
+                    return this.mode(predictions);
+                });
+            }
+
+            mode(arr) {
+                const counts = {};
+                arr.forEach(val => counts[val] = (counts[val] || 0) + 1);
+                return Object.entries(counts).reduce((a, b) => b[1] > a[1] ? b : a)[0];
+            }
         }
+
+        let forest = null;
 
         async function trainModel_ai() {
-            outputDiv_ai.textContent = 'Training model...';
+          outputDiv_ai.textContent = 'Preprocessing training data...\n';
 
-            // Calculate normalization parameters using training data
-            normalizeParams_ai = {};
-            selectedColumns_ai.forEach(col => {
-                const values = trainingData_ai.map(row => row[col]);
-                const min = Math.min(...values);
-                const max = Math.max(...values);
-                normalizeParams_ai[col] = {
-                    min,
-                    max
-                };
-            });
+          try {
+            // Get the selected columns
+            const selectedColumns = getSelectedColumns();
 
-            // Normalize only the selected columns
-            const normalizedTrainingData = normalizeData_ai(trainingData_ai, normalizeParams_ai);
-
-            // Prepare the data for TensorFlow.js
-            const X = tf.tensor2d(normalizedTrainingData.map(row => selectedColumns_ai.map(col => row[col])));
-            const y = tf.oneHot(trainingData_ai.map(row => row['Class_ID']), classMapping_ai.length);
-
-            // Define the model
-            model_ai = tf.sequential();
-            model_ai.add(tf.layers.dense({
-                units: 64,
-                activation: 'relu',
-                inputShape: [selectedColumns_ai.length]
-            }));
-            model_ai.add(tf.layers.dense({
-                units: 32,
-                activation: 'relu'
-            }));
-            model_ai.add(tf.layers.dense({
-                units: classMapping_ai.length,
-                activation: 'softmax'
-            }));
-
-            // Compile the model
-            model_ai.compile({
-                optimizer: tf.train.adam(0.001),
-                loss: 'categoricalCrossentropy',
-                metrics: ['accuracy']
-            });
-
-            // Train the model
-            try {
-                await model_ai.fit(X, y, {
-                    epochs: 100,
-                    validationSplit: 0.2,
-                    callbacks: {
-                        onEpochEnd: (epoch, logs) => {
-                            outputDiv_ai.textContent += `\nEpoch ${epoch + 1}: loss = ${logs.loss.toFixed(4)}, val_loss = ${logs.val_loss.toFixed(4)}, accuracy = ${logs.acc.toFixed(4)}, val_accuracy = ${logs.val_acc.toFixed(4)}`;
-                        }
-                    }
-                });
-
-                outputDiv_ai.textContent += '\nModel training completed.';
-            } catch (error) {
-                outputDiv_ai.textContent += `\nError during training: ${error.message}`;
+            // Check if any columns are selected
+            if (selectedColumns.length === 0) {
+              throw new Error('No columns selected for training.');
             }
+
+            // Preprocess training data using the selected columns
+            const processedData = preprocessData(trainingData_ai, selectedColumns, true);
+            console.log('Processed training data:', processedData.length, 'samples');
+
+            if (processedData.length === 0) {
+              throw new Error('No valid training data after preprocessing');
+            }
+
+            // Prepare features and labels
+            const X = processedData;
+            const y = processedData.map(row => row.Class_ID);
+
+            // Create and train the random forest
+            outputDiv_ai.textContent += 'Training Random Forest classifier...\n';
+            forest = new RandomForest(50, 8); // 50 trees, max depth 8
+            forest.fit(X, y);
+
+            outputDiv_ai.textContent += 'Model training completed successfully.\n';
+            console.log('Training completed');
+          } catch (error) {
+            console.error('Training error:', error);
+            outputDiv_ai.textContent += `\nError during training: ${error.message}`;
+          }
         }
 
         async function makePredictions_ai() {
-            if (!model_ai) {
-                outputDiv_ai.textContent = 'Please train the model first.';
-                return;
-            }
-            outputDiv_ai.textContent = 'Making predictions...';
+    if (!forest) {
+        outputDiv_ai.textContent = 'Please train the model first.';
+        return;
+    }
+    outputDiv_ai.textContent = 'Making predictions...\n';
 
-            try {
-                // Normalize prediction data using the same parameters as the training data
-                const normalizedPredictionData = normalizeData_ai(predictionData_ai, normalizeParams_ai);
+    try {
+        // Use getSelectedColumns() for consistency
+        const selectedColumns = getSelectedColumns(); 
 
-                // Prepare the data for prediction
-                const X_new = tf.tensor2d(normalizedPredictionData.map(row => selectedColumns_ai.map(col => row[col])));
+        // Preprocess prediction data using the selected columns
+        const processedData = preprocessData(predictionData_ai, selectedColumns, false);
+        console.log('Processed prediction data:', processedData.length, 'samples');
 
-                // Make predictions
-                const predictions = model_ai.predict(X_new);
+        if (processedData.length === 0) {
+            throw new Error('No valid prediction data after preprocessing');
+        }
 
-                // Get the predicted class IDs
-                const predictedClassIds = predictions.argMax(-1).dataSync();
+        // Make predictions
+        const predictions = forest.predict(processedData);
+        console.log('Predictions made:', predictions.length);
 
-                // Combine the prediction data with the predicted class IDs and names
+                // Count predictions by class
+                const distribution = {};
+                predictions.forEach(pred => {
+                    distribution[pred] = (distribution[pred] || 0) + 1;
+                });
+                console.log('Prediction distribution:', distribution);
+
+                // Combine predictions with original data, including the index
                 const result = predictionData_ai.map((row, index) => ({
                     ...row,
-                    Class_ID: predictedClassIds[index],
-                    Class_Name: getClassName_ai(predictedClassIds[index])
+                    Index: index,  // Include the original index
+                    Class_ID: predictions[index],
+                    Class_Name: getClassName_ai(predictions[index])
                 }));
 
                 // Generate CSV content
+                const headers = Object.keys(result[0]);
                 const csvContent = [
-                    ['ROI', ...selectedColumns_ai, 'Class_ID', 'Class_Name'].join(';'),
-                    ...result.map((row, index) => [
-                        row.ROI || `Cell_${index + 1}`,
-                        ...selectedColumns_ai.map(col => row[col]),
-                        row.Class_ID,
-                        row.Class_Name
-                    ].join(';'))
+                    headers.join(';'),
+                    ...result.map(row => headers.map(header => row[header]).join(';'))
                 ].join('\n');
 
-                // Create a download link for the CSV file
+                // Create download link
                 const blob = new Blob([csvContent], {
                     type: 'text/csv;charset=utf-8;'
                 });
                 const link = document.createElement('a');
-                if (link.download !== undefined) {
-                    const url = URL.createObjectURL(blob);
-                    link.setAttribute('href', url);
-                    link.setAttribute('download', 'predictions.csv');
-                    link.style.visibility = 'hidden';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                }
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'predictions.csv');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
 
-                outputDiv_ai.textContent += '\nPredictions completed. Download started for predictions.csv';
+                outputDiv_ai.textContent += `\nPredictions completed. Class distribution:\n${JSON.stringify(distribution, null, 2)}`;
+
             } catch (error) {
-                outputDiv_ai.textContent += `\nError during prediction: ${error.message}`;
-            }
+        console.error('Prediction error:', error);
+        outputDiv_ai.textContent += `\nError during prediction: ${error.message}`;
+    }
+}
+        
+        
+        function getClassName_ai(classId) {
+            return classNames_ai[classId] || 'Unknown';
         }
+
+        // Add event listeners to the buttons
+        trainButton_ai.addEventListener('click', trainModel_ai);
+        predictButton_ai.addEventListener('click', makePredictions_ai);
     </script>
 </body>
 
